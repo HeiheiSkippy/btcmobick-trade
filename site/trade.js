@@ -563,9 +563,16 @@ function routeFeeQty(value, node) {
   var digits = routeAsset(node) === "krw" ? (value < 100 ? 2 : 0) : routeDigits(node);
   return Number(value.toFixed(digits)).toLocaleString("ko-KR", { maximumFractionDigits: digits });
 }
+// Path name. Transfer steps read "to X", so a path that starts with one also names where it starts
+// ("빗썸 USDT → 바이낸스로 송금 → ...").
+function routePathName(path) {
+  var labels = routeGroupSteps(path).map(routeGroupLabel);
+  if (path[0].kind === "transfer") labels[0] = routeNodeName(path[0].from) + " → " + path[0].label.replace(/ (USDT|BMB) /, " ");
+  return labels.join(" → ");
+}
 function routeCard(result, destination, scenario, best, referenceOut, amountHtml) {
   var path = result.path, out = result.out;
-  var names = routeGroupSteps(path).map(routeGroupLabel).join(" → ");
+  var names = routePathName(path);
   // Details are not grouped: each trade is numbered, since consecutive Uniswap steps are separate swaps for the user.
   var detail = result.steps.map(function (step) {
     var info = step.info || {};
@@ -585,7 +592,7 @@ function routeCard(result, destination, scenario, best, referenceOut, amountHtml
       '<ol class="route-steps-detail">' + detail + '</ol>') + '</article>';
 }
 function routeFailure(path, reason) {
-  var names = routeGroupSteps(path).map(routeGroupLabel).join(" → ");
+  var names = routePathName(path);
   var safe = String(reason || "견적 실패").replace(/[&<>"']/g, function (c) {
     return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
   });
@@ -790,7 +797,7 @@ async function runRouteSimulator(auto) {
     '<button type="button" class="route-link-button" data-open-settings>수수료 및 출금비 설정</button>에서 입력해 주세요.</p>' + html;
   // Check whether the top path changed. Paths are compared by step ids, so number-only changes don't count.
   var bestNow = now.length ? { key: now[0].path.map(function (e) { return e.id; }).join(">"),
-    name: routeGroupSteps(now[0].path).map(routeGroupLabel).join(" → "), out: now[0].out } : null;
+    name: routePathName(now[0].path), out: now[0].out } : null;
   if (auto && routeLastBest && (!bestNow || bestNow.key !== routeLastBest.key))
     routeBestNotice = '<p class="route-status route-changed">' + hmss(new Date()) + ' 갱신에서 1위 경로가 바뀌었습니다. 이전 1위: ' +
       routeEscape(routeLastBest.name) + ' (' + routeShortQty(routeLastBest.out, to) + ' ' + routeUnit(to) + ')</p>';
@@ -859,11 +866,20 @@ function routeBusy(on, manual) {
 // Most evaluations differ by under 1% in input, so Uniswap quotes are reused by ratio and requests stay low (uniSplit near).
 async function routeInverse(paths, target, marketData, version, failed) {
   // First guess: value each asset in USDT at current prices, plus a 3% margin and about 3 USDT for withdraw fees.
-  // Assets without a price (BNB, ETH, BTC) start at 1:1 and are corrected by ratio in the second pass.
+  // BTC, ETH and BNB are priced from the Binance USDT book or the Bithumb KRW book fetched for this lookup.
+  // A guess far off (e.g. 1:1) can fall below withdraw minimums and fail the whole path before it is corrected.
   var spot = has(D.wbmbInMovn) && has(D.movnUsdt) ? D.wbmbInMovn * D.movnUsdt : null;
+  function mid(book) { return book && book.asks[0] && book.bids[0] ? (book.asks[0][0] + book.bids[0][0]) / 2 : null; }
+  function bookValue(asset) {
+    var b = mid(marketData.binance && marketData.binance[asset.toUpperCase() + "USDT"]);
+    if (b > 0) return b;
+    var k = mid(marketData.bithumb && marketData.bithumb["KRW-" + asset.toUpperCase()]);
+    return k > 0 && has(D.usdtKrw) ? k / D.usdtKrw : null;
+  }
   function usdtValue(asset) {
     return asset === "usdt" ? 1 : asset === "krw" ? (has(D.usdtKrw) ? 1 / D.usdtKrw : null)
-      : asset === "movn" ? (has(D.movnUsdt) ? D.movnUsdt : null) : asset === "bmb" || asset === "wbmb" ? spot : null;
+      : asset === "movn" ? (has(D.movnUsdt) ? D.movnUsdt : null) : asset === "bmb" || asset === "wbmb" ? spot
+      : bookValue(asset);
   }
   function guess(path) {
     var vs = usdtValue(routeAsset(path[0].from)), ve = usdtValue(routeAsset(path[path.length - 1].to));
