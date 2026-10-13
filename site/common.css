@@ -289,7 +289,8 @@
     border: 1px solid var(--line); border-radius: 3px; padding: 2px 6px; }
   .route-mania .route-council { width: 110px; }
   .route-mania .mania-price { display: inline-flex; align-items: center; gap: 6px; }
-  .route-mania .mania-reset { padding: 3px 10px; border: 1px solid var(--line); border-radius: 4px; background: none; color: inherit; font: inherit; font-size: 12.5px; cursor: pointer; }
+  .pick-actions { margin: 8px 0 0 14px; }
+  .route-mania .mania-reset, .reset-button { padding: 3px 10px; border: 1px solid var(--line); border-radius: 4px; background: none; color: inherit; font: inherit; font-size: 12.5px; cursor: pointer; }
   .route-mania { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 13px; }
   .route-mania[hidden] { display: none; }
   .route-mania .pick-title, .route-mania .pick-lead { flex-basis: 100%; }

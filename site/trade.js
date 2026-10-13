@@ -1103,6 +1103,23 @@ function tradeTabShown() {
   });
 });
 
+// Reset: assets and places back to their defaults, both amounts cleared, results cleared (same as a fresh page).
+$("trade-reset").addEventListener("click", function () {
+  clearTimeout(tradeAmountInput.t);
+  $("route-from-asset").value = $("route-from-asset").dataset.default;
+  $("route-from-place").value = $("route-from-place").dataset.default;
+  $("route-to-asset").value = $("route-to-asset").dataset.default;
+  $("route-to-place").value = $("route-to-place").dataset.default;
+  fillRouteAssets("from");
+  fillRouteAssets("to");
+  $("route-amount").value = "";
+  $("route-get-amount").value = "";
+  $("route-amount").classList.remove("computed");
+  $("route-get-amount").classList.remove("computed");
+  TRADE.basis = "get";
+  routeInputsChanged(true);
+});
+
 loadLbankFees();
 everyVisible(loadLbankFees, 10 * 60000);
 setInterval(routeStatusAge, 10000);
