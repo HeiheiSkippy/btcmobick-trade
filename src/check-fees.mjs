@@ -60,6 +60,14 @@ const mainOk = await check('바이낸스 v2 config/getOne', async () => {
   return checkRows('바이낸스 v2 config/getOne', j && j.data, (r) => r.network, (r) => r.withdrawFee, BINANCE_NETS);
 });
 
+// BTC and BNB move between Binance and the personal wallet on one network each (site/trade.js ROUTE_COIN_NETWORKS).
+for (const [coin, net] of [['BTC', 'BTC'], ['BNB', 'BSC']]) {
+  await check(`바이낸스 v2 config/getOne ${coin}`, async () => {
+    const j = await get(BINANCE_MAIN.replace('coin=USDT', `coin=${coin}`), { browser: true });
+    return checkRows(`바이낸스 v2 config/getOne ${coin}`, j && j.data, (r) => r.network, (r) => r.withdrawFee, [net]);
+  });
+}
+
 if (all || !mainOk) await check('바이낸스 v1 getNetworkCoinAll(여벌)', async () => {
   const j = await get(BINANCE_BACKUP, { browser: true });
   const usdt = (j && j.data || []).find((c) => c.coin === 'USDT');

@@ -201,6 +201,9 @@ function routeStatusAge() {
 }
 // Transfer step names read as "to X", so a path does not repeat the asset at every arrow.
 var ROUTE_SEND_TO = { bithumb: "빗썸으로", binance: "바이낸스로", lbank: "LBank로", wallet: "개인 지갑으로" };
+// BTC and BNB move between Binance and the personal wallet on one fixed network each (Binance network ids BTC, BSC).
+// ETH is left out: the same asset lives on several networks and choosing the wrong one loses funds.
+var ROUTE_COIN_NETWORKS = { btc: { net: "bitcoin", name: "Bitcoin" }, bnb: { net: "bsc", name: "BSC" } };
 function routeEdges(scenario) {
   var edges = [
     { id: "dex-usdt-movn", from: "wallet-usdt", to: "wallet-movn", label: "유니스왑 USDT → MOVN", kind: "dex" },
@@ -230,6 +233,13 @@ function routeEdges(scenario) {
   ROUTE_USDT_TRANSFERS.forEach(function (pair) {
     edges.push({ id: "send-usdt-" + pair[0] + "-" + pair[1], from: pair[0] + "-usdt", to: pair[1] + "-usdt",
       label: ROUTE_SEND_TO[pair[1]] + " USDT 송금", kind: "transfer", asset: "usdt" });
+  });
+  Object.keys(ROUTE_COIN_NETWORKS).forEach(function (asset) {
+    var name = ROUTE_ASSET_NAMES[asset];
+    edges.push(
+      { id: "withdraw-" + asset + "-binance-wallet", from: "binance-" + asset, to: "wallet-" + asset, label: ROUTE_SEND_TO.wallet + " " + name + " 출금", kind: "transfer", asset: asset },
+      { id: "deposit-" + asset + "-wallet-binance", from: "wallet-" + asset, to: "binance-" + asset, label: ROUTE_SEND_TO.binance + " " + name + " 입금", kind: "transfer", asset: asset }
+    );
   });
   edges.push(
     { id: "lbank-withdraw-bmb", from: "lbank-bmb", to: "wallet-bmb", label: ROUTE_SEND_TO.wallet + " BMB 출금", kind: "transfer" },
@@ -315,17 +325,18 @@ async function routeBithumbFees() {
 }
 // If the first endpoint is blocked or changes format, read USDT from the fallback endpoint (all coins, about 2 MB).
 // Neither endpoint is documented. If both fail, find a new one following Docs/FEE_SOURCE_CHECK.md.
-async function routeBinanceFees() {
+async function routeBinanceFees(coin) {
+  coin = coin || "USDT";
   try {
-    var response = await fetch("https://www.binance.com/bapi/capital/v2/public/capital/config/getOne?coin=USDT&lang=en", { cache: "no-store" });
+    var response = await fetch("https://www.binance.com/bapi/capital/v2/public/capital/config/getOne?coin=" + coin + "&lang=en", { cache: "no-store" });
     var fees = response.ok ? parseBinanceFees(await response.json()) : {};
     if (Object.keys(fees).length) return fees;
   } catch (e) {}
   var all = await fetch("https://www.binance.com/bapi/capital/v1/public/capital/getNetworkCoinAll", { cache: "no-store" });
-  if (!all.ok) throw new Error("바이낸스 USDT 출금비 요청 실패");
-  var usdt = ((await all.json()).data || []).find(function (c) { return c.coin === "USDT"; });
-  var backup = parseBinanceFees({ data: usdt && usdt.networkList });
-  if (!Object.keys(backup).length) throw new Error("바이낸스 USDT 출금비 형식이 바뀌었습니다");
+  if (!all.ok) throw new Error("바이낸스 " + coin + " 출금비 요청 실패");
+  var row = ((await all.json()).data || []).find(function (c) { return c.coin === coin; });
+  var backup = parseBinanceFees({ data: row && row.networkList });
+  if (!Object.keys(backup).length) throw new Error("바이낸스 " + coin + " 출금비 형식이 바뀌었습니다");
   return backup;
 }
 // LBank deposit/withdraw settings come from a file saved by the GitHub Action (the LBank API blocks browser requests).
@@ -439,6 +450,34 @@ function routeUsdtTransfer(edge, amount, marketData, info) {
   info.skippedInputs = missing;
   return best.out;
 }
+// BTC/BNB between Binance and the personal wallet. Withdrawals pay Binance's fee and must meet its minimum;
+// deposits from the wallet pay only the network fee, which is shown as excluded.
+function routeCoinTransfer(edge, amount, marketData, info) {
+  var c = ROUTE_COIN_NETWORKS[edge.asset], name = ROUTE_ASSET_NAMES[edge.asset];
+  var fees = marketData.binanceCoinFees && marketData.binanceCoinFees[edge.asset];
+  if (!fees) throw new Error("바이낸스 " + name + " 출금비를 받지 못했습니다");
+  var row = fees[c.net];
+  if (!row) throw new Error("바이낸스 " + name + " " + c.name + " 네트워크 정보가 없습니다");
+  info.network = c.name;
+  info.feeNode = edge.from;
+  var excluded = edge.asset === "bnb" ? "BSC 가스비 별도" : "비트코인 전송 수수료 별도";
+  if (routePlace(edge.from) === "wallet") {
+    if (!row.canDeposit) throw new Error("바이낸스 " + name + " " + c.name + " 입금이 중지되어 있습니다");
+    info.fee = 0;
+    info.noAmount = true;
+    info.what = "없음";
+    if (edge.asset === "bnb") info.gas = "BSC";
+    info.basis = c.name + " 네트워크 전송 · 바이낸스 입금 가능 확인됨 · " + excluded;
+    return amount;
+  }
+  if (!row.canWithdraw) throw new Error("바이낸스 " + name + " " + c.name + " 출금이 중지되어 있습니다");
+  if (amount < row.min) throw new Error("바이낸스 " + name + " 최소 출금량 " + row.min + " 미만입니다");
+  if (!(amount > row.fee)) throw new Error("전송 수량이 출금 수수료 이하입니다");
+  info.fee = row.fee;
+  info.src = "바이낸스 공개값, " + routeWhen(marketData.binanceCoinFeesAt);
+  info.basis = c.name + " 네트워크 출금";
+  return amount - row.fee;
+}
 // Source label for trading fee rates.
 // Backs out a trade step's fee from its input and output amounts: paid in the input currency when buying, the output when selling.
 // Fee line: whether the trading fee is the default or user-set. Note: the book range touched (asks when buying, bids when selling) and the average price.
@@ -494,6 +533,7 @@ function routeStep(edge, amount, scenario, marketData, info) {
     return Promise.resolve(lbankOut);
   }
   if (edge.kind === "transfer" && edge.asset === "usdt") return Promise.resolve(routeUsdtTransfer(edge, amount, marketData, info));
+  if (edge.kind === "transfer" && ROUTE_COIN_NETWORKS[edge.asset]) return Promise.resolve(routeCoinTransfer(edge, amount, marketData, info));
   if (edge.kind === "transfer") {
     var fee = edge.id === "lbank-withdraw-bmb" ? routeLbankWithdraw("bmb", "mobick", amount) : 0;
     if (edge.id === "lbank-deposit-bmb") routeLbankDeposit("bmb", "mobick");
@@ -543,9 +583,10 @@ async function routeQuote(path, amount, scenario, marketData) {
   return { out: out, steps: steps };
 }
 // KRW in whole won; other assets at their own decimals.
-// Headline amounts: KRW in whole won, others to 2 decimals from 100 up and 4 below (same as the summary line).
+// Headline amounts: KRW in whole won, BTC to 6 decimals, others to 2 decimals from 100 up and 4 below.
 function routeShortQty(value, node) {
-  return routeAsset(node) === "krw" ? fmt(value, 0) : fmt(value, value >= 100 ? 2 : 4);
+  var asset = routeAsset(node);
+  return asset === "krw" ? fmt(value, 0) : asset === "btc" ? fmt(value, 6) : fmt(value, value >= 100 ? 2 : 4);
 }
 function routeQty(value, node) {
   return routeAsset(node) === "krw" ? fmt(value, value < 100 ? 2 : 0) : fmt(value, routeDigits(node));
@@ -567,7 +608,7 @@ function routeFeeQty(value, node) {
 // ("빗썸 USDT → 바이낸스로 송금 → ...").
 function routePathName(path) {
   var labels = routeGroupSteps(path).map(routeGroupLabel);
-  if (path[0].kind === "transfer") labels[0] = routeNodeName(path[0].from) + " → " + path[0].label.replace(/ (USDT|BMB) /, " ");
+  if (path[0].kind === "transfer") labels[0] = routeNodeName(path[0].from) + " → " + path[0].label.replace(/ (USDT|BMB|BTC|BNB) /, " ");
   return labels.join(" → ");
 }
 function routeCard(result, destination, scenario, best, referenceOut, amountHtml) {
@@ -642,8 +683,8 @@ async function runRouteSimulator(auto) {
     return !path.some(function (edge, i) { return i > 0 && edge.kind === "mania" && path[i - 1].kind === "mania"; });
   });
   if (!paths.length) {
-    status.textContent = /-(bnb|eth|btc)$/.test(from) || /-(bnb|eth|btc)$/.test(to)
-      ? "BNB·ETH·BTC는 아직 거래소 안의 매수·매도만 계산합니다. 거래소 간 송금과 개인 지갑 경로는 준비 중입니다."
+    status.textContent = /-eth$/.test(from) || /-eth$/.test(to)
+      ? "ETH는 거래소 안의 매수·매도만 계산합니다. 거래소 간 송금과 개인 지갑 경로는 넣지 않습니다."
       : "이용 거래소로는 연결되는 경로가 없습니다. 이용 거래소 선택을 확인해 주세요.";
     return;
   }
@@ -673,7 +714,14 @@ async function runRouteSimulator(auto) {
     allEdges.some(function (edge) { return edge.kind === "transfer" && (edge.from === "binance-usdt" || edge.to === "binance-usdt"); })
       ? routeBinanceFees().then(function (fees) { marketData.binanceFees = fees; marketData.binanceFeesAt = new Date(); },
         function () { marketData.binanceFeesFailed = true; }) : null
-  ]);
+  ].concat(Object.keys(ROUTE_COIN_NETWORKS).map(function (asset) {
+    if (!allEdges.some(function (edge) { return edge.kind === "transfer" && edge.asset === asset; })) return null;
+    return routeBinanceFees(asset.toUpperCase()).then(function (fees) {
+      marketData.binanceCoinFees = marketData.binanceCoinFees || {};
+      marketData.binanceCoinFees[asset] = fees;
+      marketData.binanceCoinFeesAt = new Date();
+    }, function () {});
+  })));
   if (inverse) {
     var inv = await routeInverse(paths, amount, marketData, version, failed);
     if (inv === null) return;

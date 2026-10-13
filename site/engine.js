@@ -115,7 +115,7 @@ function parseBithumbStatus(payload) {
 }
 // Reads withdraw fee, minimum and deposit/withdraw flags from the public endpoint behind Binance's withdraw page.
 // The endpoint is undocumented and may change.
-const BINANCE_NETWORKS = { TRX: "tron", ETH: "ethereum", BSC: "bsc", KAIA: "kaia", APT: "aptos" };
+const BINANCE_NETWORKS = { TRX: "tron", ETH: "ethereum", BSC: "bsc", KAIA: "kaia", APT: "aptos", BTC: "bitcoin" };
 function parseBinanceFees(payload) {
   const fees = {};
   if (!payload || !Array.isArray(payload.data)) return fees;

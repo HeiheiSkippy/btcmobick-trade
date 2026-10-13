@@ -164,6 +164,13 @@ test('바이낸스 USDT 출금비는 쓰는 네트워크만 읽고 입출금 가
   assert.equal(fees.tron.fee, 1.5);
   assert.equal(fees.kaia.canWithdraw, false);
   assert.equal(Object.keys(parseBinanceFees(null)).length, 0);
+  // The same parser reads BTC and BNB coin responses (network BTC = bitcoin, BSC = bsc).
+  const btc = parseBinanceFees({ data: [
+    { network: 'BTC', withdrawFee: '0.00002', withdrawMin: '0.0001', withdrawEnable: true, depositEnable: true },
+    { network: 'LIGHTNING', withdrawFee: '0.000001', withdrawMin: '0.00002', withdrawEnable: true, depositEnable: true },
+  ] });
+  assert.deepEqual(Array.from(Object.keys(btc)), ['bitcoin']);
+  assert.equal(btc.bitcoin.min, 0.0001);
 });
 
 test('연달아 보내기만 하는 USDT 우회는 중간에 들르는 곳을 하나씩 뺀 경로와 견준다', () => {
