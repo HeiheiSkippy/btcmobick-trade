@@ -46,11 +46,11 @@
     </details>
   </section>
 
-  <!-- Buy/sell tab: pick a goal and get a summary line and ranking from a few inputs. -->
-  <section class="pad" id="tab-trade">
-    <!-- Settings shared by all trade modes -->
+  <!-- Trade comparison, split into three cards so each block stands apart on phones. -->
+  <div class="trade-cards" id="tab-trade">
+  <section class="pad trade-card">
     <div class="trade-settings common-settings">
-    <h3 class="pick-title">이용 거래소</h3>
+    <h3 class="pick-title card-title">이용 거래소</h3>
     <p class="pick-lead">계산에 포함할 거래소를 선택하세요.</p>
       <div class="route-exchange-list">
         <label><input id="route-exchange-uniswap" type="checkbox" checked> 유니스왑</label>
@@ -79,13 +79,16 @@
       </div>
     </details>
     </div>
+  </section>
+  <section class="pad trade-card">
     <!-- One view: choose the asset/place to sell and the asset/place to receive; the amount typed in is the basis. -->
-    <h3 class="pick-title">거래 조건 입력</h3>
+    <h3 class="pick-title card-title">거래 조건 입력</h3>
     <p class="pick-lead">매도 또는 매수 수량 하나를 입력하면 나머지는 자동 계산됩니다.</p>
     <div class="route-pick">
       <label class="pick-field"><span>매도 자산</span><select id="route-from-asset" data-default="krw"></select></label>
       <label class="pick-field"><span>보유 위치</span><select id="route-from-place" data-default="any"></select></label>
       <label class="pick-field"><span>매도 수량</span><input id="route-amount" type="number" min="0" step="any" inputmode="decimal" placeholder="입력 또는 계산 결과"></label>
+      <div class="pick-arrow" aria-hidden="true">↓</div>
       <label class="pick-field"><span>매수 자산</span><select id="route-to-asset" data-default="bmb"></select></label>
       <label class="pick-field"><span>수령처</span><select id="route-to-place" data-default="any"></select></label>
       <label class="pick-field"><span>매수 수량</span><input id="route-get-amount" type="number" min="0" step="any" inputmode="decimal" placeholder="입력 또는 계산 결과"></label>
@@ -98,10 +101,11 @@
         <li>수령처를 '지정 안 함'으로 두면 매수한 곳에서 끝납니다(LBank 매수는 LBank, 유니스왑 매수는 개인 지갑 WBMB).</li>
       </ul>
     </details>
+  </section>
 
-    <!-- Results (route calculation), in the same title + lead + indented content layout as above -->
-    <div id="route-simulator">
-    <h3 class="pick-title">조회 결과</h3>
+  <!-- Results (route calculation) -->
+  <section class="pad trade-card" id="route-simulator">
+    <h3 class="pick-title card-title">조회 결과</h3>
     <p class="pick-lead">계산상 유리한 경로부터 보여 줍니다.</p>
     <div class="route-run-row"><button type="button" id="route-run" class="route-button">다시 조회</button>
       <span class="route-busy" aria-hidden="true"><span class="route-spinner"></span><span id="route-elapsed"></span></span>
@@ -118,9 +122,8 @@
         <li>근거(BTC·BNB 개인 지갑 출금·입금, 바이낸스만): <a href="https://www.binance.com/bapi/capital/v2/public/capital/config/getOne?coin=BTC&amp;lang=en" target="_blank" rel="noopener">BTC(Bitcoin)</a> · <a href="https://www.binance.com/bapi/capital/v2/public/capital/config/getOne?coin=BNB&amp;lang=en" target="_blank" rel="noopener">BNB(BSC)</a></li>
       </ul>
     </details>
-    </div>
-
   </section>
+  </div>
 
   <footer>
     <details class="foot-sec">

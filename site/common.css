@@ -154,19 +154,20 @@
     .route-pick { grid-template-columns: 1fr 1fr; }
     .route-pick-label { grid-column: 1 / -1; margin-top: 4px; }
     .route-pick .pick-field:has(input), .route-pick button { grid-column: 1 / -1; }
+    .route-pick .pick-arrow { display: block; grid-column: 1 / -1; text-align: center; line-height: 1; color: var(--faint); font-size: 13px; }
   }
   /* Every block at the top of the trade tab is title (pick-title) + one gray lead line (pick-lead) + content; folding rows match the title size. */
-  .route-settings { margin-top: 14px; }
-  .route-settings > summary { cursor: pointer; font-size: 14px; font-weight: 700; }
+  .route-settings { margin-top: 12px; }
+  .route-settings > summary { cursor: pointer; font-size: 13.5px; font-weight: 700; }
   .route-settings > summary small { margin-left: 6px; font-weight: 400; color: var(--muted); }
   .route-settings-body h3 { margin: 16px 0 2px; font-size: 13px; }
   /* Lead and content under a title are indented one step to separate blocks. */
-  .pick-lead, .route-exchange-list, .route-pick, .pick-help, .route-settings-body { margin-left: 14px; }
-  .route-mania { padding-left: 14px; }
-  .route-mania .pick-title { margin-left: -14px; }
-  .route-mania .pick-lead { margin-left: 0; }
-  #route-simulator .route-run-row, #route-results, #route-simulator .route-basis { margin-left: 14px; }
-  details.pick-help { margin: 6px 0 0 14px; }
+  /* Trade comparison: one card per block (venues and settings / trade conditions / results). */
+  .trade-cards { display: flex; flex-direction: column; gap: 12px; }
+  .pick-title.card-title { margin: 0 0 2px; font-size: 16px; }
+  .trade-card .pick-lead { margin-bottom: 10px; }
+  details.pick-help { margin: 8px 0 0; }
+  .pick-arrow { display: none; }
   details.pick-help ul { margin: 4px 0 0; padding-left: 18px; font-size: 12px; color: var(--muted); }
   .route-settings-help { margin: 0 0 6px; font-size: 12px; color: var(--muted); }
   .route-exchange-list { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; }
@@ -289,9 +290,12 @@
     border: 1px solid var(--line); border-radius: 3px; padding: 2px 6px; }
   .route-mania .route-council { width: 110px; }
   .route-mania .mania-price { display: inline-flex; align-items: center; gap: 6px; }
-  .pick-actions { margin: 8px 0 0 14px; }
+  .pick-actions { margin: 8px 0 0; }
   .route-mania .mania-reset, .reset-button { padding: 3px 10px; border: 1px solid var(--line); border-radius: 4px; background: none; color: inherit; font: inherit; font-size: 12.5px; cursor: pointer; }
-  .route-mania { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 13px; }
+  .route-mania { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 13px;
+    margin-top: 10px; padding: 10px 12px; background: var(--surface-sunk); border-radius: 6px; }
+  .route-mania .pick-title { margin: 0; font-size: 13px; }
+  .route-mania .pick-lead { margin: -4px 0 0; }
   .route-mania[hidden] { display: none; }
   .route-mania .pick-title, .route-mania .pick-lead { flex-basis: 100%; }
   .route-mania .route-council { min-height: 30px; padding: 3px 6px; text-align: right; font-family: var(--mono); }

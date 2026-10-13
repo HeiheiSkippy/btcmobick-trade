@@ -678,7 +678,7 @@ function renderMovn() {
   link.href = "https://app.uniswap.org/explore/pools/bnb/" + MOVN_POOL.id;
   link.title = "유니스왑 MOVN/USDT " + feeLabel(MOVN_POOL) + " 풀";
   link.textContent = "유니스왑 " + feeLabel(MOVN_POOL);
-  $("stamp-pools").innerHTML = stamp("pools", true) + (ok ? " · 1달러 대비 " + pct(D.movnUsdt - 1) : "");
+  $("stamp-pools").innerHTML = stamp("pools", true);
   renderMarketNow();
 }
 // Current prices in the legend slot above the chart. Uniswap = pool price (WBMB/MOVN × MOVN/USDT), LBank = last websocket trade.
