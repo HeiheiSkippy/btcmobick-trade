@@ -910,8 +910,9 @@ function routeBusy(on, manual) {
 // Receive-amount basis (solving backwards): for each path, find how much must go in to get `target` out at the end.
 // Output is nearly linear in input (proportional plus fixed costs like withdraw fees), so a secant through two points finds it.
 // 1) All paths: estimate the input from market prices, then correct it by the observed ratio.
-// 2) The top two paths per start/end pair: refine with the estimate, the ratio-corrected value and the secant (step amounts use this input).
+// 2) Up to INVERSE_PER_PAIR paths per start/end pair: refine with the estimate, the ratio-corrected value and the secant (step amounts use this input).
 // Most evaluations differ by under 1% in input, so Uniswap quotes are reused by ratio and requests stay low (uniSplit near).
+var INVERSE_PER_PAIR = 6;
 async function routeInverse(paths, target, marketData, version, failed) {
   // First guess: value each asset in USDT at current prices, plus a 3% margin and about 3 USDT for withdraw fees.
   // BTC, ETH and BNB are priced from the Binance USDT book or the Bithumb KRW book fetched for this lookup.
@@ -945,8 +946,15 @@ async function routeInverse(paths, target, marketData, version, failed) {
     } catch (e) { failed.push({ path: paths[i], reason: e.message, inputIds: e.inputIds }); }
     if (version !== routeVersion) return null;
   }
+  // Drop send-only detours that cost no less than the direct transfer (same rule as the send-amount basis),
+  // then refine up to INVERSE_PER_PAIR paths per start/end pair: the top card plus the 5 under "other paths".
+  var ids = new Set(paths.flat().map(function (e) { return e.id; })), costByKey = {};
+  first.forEach(function (r) { costByKey[r.path.map(function (e) { return e.id; }).join(">")] = r.cost; });
+  first = first.filter(function (r) {
+    return !routeShorterKeys(r.path, ids).some(function (key) { return costByKey[key] != null && costByKey[key] <= r.cost * (1 + 1e-12); });
+  });
   var count = {}, out = [], picks = first.slice().sort(function (a, b) { return a.cost - b.cost; })
-    .filter(function (r) { var k = r.path[0].from + ">" + r.path[r.path.length - 1].to; count[k] = (count[k] || 0) + 1; return count[k] <= 2; });
+    .filter(function (r) { var k = r.path[0].from + ">" + r.path[r.path.length - 1].to; count[k] = (count[k] || 0) + 1; return count[k] <= INVERSE_PER_PAIR; });
   for (var k = 0; k < picks.length; k++) {
     var r = picks[k];
     try {
