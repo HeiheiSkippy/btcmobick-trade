@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="비트모빅(BMB)의 LBank·유니스왑 시장가와 거래 경로별 실제 수령량을 공개된 자료로 계산해 보여 주는 비공식 화면입니다.">
+<meta name="robots" content="index, follow">
+<style>
+  :root { color-scheme: light dark; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px system-ui, sans-serif; }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+</style>
+<title>BTCMobick 거래 비교</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+</head>
+<body>
+<link rel="stylesheet" href="common.css">
+<div class="wrap">
+  <header class="masthead">
+    <h1><span class="brand">BTCMobick</span> 거래 비교</h1>
+    <div class="unofficial">
+      <span>개인적으로 사용하기 위해 공개된 자료를 이용해 만들었습니다.<br><b>값이 늦거나 정확하지 않을 수 있으니 단순 참고용으로만 활용해 주세요.</b></span>
+    </div>
+    <div class="rates-line summary-rates" aria-label="환산 기준">
+      <span class="rate-chip"><span class="num">1 USDT = ₩<span id="head-usdt">—</span></span><span class="rate-src"><a href="https://www.bithumb.com/react/trade/order/USDT-KRW" target="_blank" rel="noopener" title="빗썸 USDT/원 거래 화면">빗썸</a> · <span id="stamp-bithumb">—</span></span></span>
+      <span class="rate-chip"><span class="num">1 MOVN = <span id="head-movn">—</span> USDT</span><span class="rate-src"><a id="head-movn-pool" href="https://app.uniswap.org/explore/pools/bnb/0x5de52159724f0d421445f4a5eeccc047bb6cc7821a008b7a171d896256d3a217" target="_blank" rel="noopener" title="유니스왑 MOVN/USDT 0.05% 풀">유니스왑</a> <span class="tag" title="MOVN/USDT 풀 중 현재 가격 구간의 유동성이 가장 큰 풀">유동성 최대 풀</span> · <span id="stamp-pools">—</span></span></span>
+    </div>
+  </header>
+
+  <!-- Summary: always visible. -->
+  <section class="pad summary">
+    <h2 class="council-title">BMB 시장가 <small>최근 7일 · USDT · 수수료 미포함</small></h2>
+    <div class="market-now" id="market-now" aria-live="off"><span class="now-item"><small>지금 가격 받는 중…</small></span></div>
+    <figure class="market-chart" id="market-chart" aria-label="유니스왑과 LBank의 BMB 시장가 추이(최근 7일)">
+      <p class="loading">그래프 불러오는 중…</p>
+    </figure>
+    <!-- Token addresses. Fake tokens with the same names exist, so verify by address. -->
+    <details class="token-addrs">
+      <summary>토큰 계약 주소</summary>
+      <ul>
+        <li><b>WBMB</b> <a href="https://bscscan.com/token/0x9E4c611B834672c3643D9818249366bf65ae4C86" target="_blank" rel="noopener"><code>0x9E4c611B834672c3643D9818249366bf65ae4C86</code></a> <a href="https://app.uniswap.org/explore/tokens/bnb/0x9e4c611b834672c3643d9818249366bf65ae4c86" target="_blank" rel="noopener">유니스왑</a></li>
+        <li><b>MOVN</b> <a href="https://bscscan.com/token/0x200b63AA750c901892d4DCf82439860F9C270274" target="_blank" rel="noopener"><code>0x200b63AA750c901892d4DCf82439860F9C270274</code></a> <a href="https://app.uniswap.org/explore/tokens/bnb/0x200b63aa750c901892d4dcf82439860f9c270274" target="_blank" rel="noopener">유니스왑</a></li>
+      </ul>
+    </details>
+  </section>
+
+  <!-- Buy/sell tab: pick a goal and get a summary line and ranking from a few inputs. -->
+  <section class="pad" id="tab-trade">
+    <!-- Settings shared by all trade modes -->
+    <div class="trade-settings common-settings">
+    <h3 class="pick-title">이용 거래소</h3>
+    <p class="pick-lead">계산에 포함할 거래소를 선택하세요.</p>
+      <div class="route-exchange-list">
+        <label><input id="route-exchange-uniswap" type="checkbox" checked> 유니스왑</label>
+        <label><input id="route-exchange-bithumb" type="checkbox" checked> 빗썸</label>
+        <label><input id="route-exchange-binance" type="checkbox" checked> 바이낸스</label>
+        <label><input id="route-exchange-lbank" type="checkbox" checked> LBank</label>
+        <label><input id="route-exchange-mania" type="checkbox"> 모빅매니아</label>
+      </div>
+    <div class="route-mania" id="route-mania-box" hidden>
+      <h3 class="pick-title">모빅매니아 거래가</h3>
+      <p class="pick-lead">모빅매니아에서 거래할 가격을 입력하세요. 비워 두면 경로에서 제외됩니다.</p>
+      <label class="mania-price">매수 가격 <input class="route-council" type="number" min="0" step="1000" inputmode="numeric" data-mania-box="route-mania-buy" aria-label="모빅매니아에서 매수할 때 가격(원/BMB)"> 원/BMB</label>
+      <label class="mania-price">매도 가격 <input class="route-council" type="number" min="0" step="1000" inputmode="numeric" data-mania-box="route-mania-sell" aria-label="모빅매니아에서 매도할 때 가격(원/BMB)"> 원/BMB</label>
+      <button type="button" id="route-mania-reset" class="mania-reset">초기화</button>
+    </div>
+    <details class="route-settings" id="route-settings">
+      <summary>거래 수수료 및 출금비 설정 <small id="route-settings-summary"></small></summary>
+      <div class="route-settings-body">
+        <h3>거래 수수료율</h3>
+        <p class="route-settings-help">할인·등급이 있으면 수정하세요.</p>
+        <div id="route-setting-trade" class="route-setting-rows"></div>
+        <h3>출금비</h3>
+        <p class="route-settings-help">출금비는 자동 조회됩니다. 조회가 실패하면 입력칸에 직접 입력해 주세요. 조회되면 입력값은 무시되고, 새로고침하면 초기화됩니다.</p>
+        <div id="route-setting-fees" class="route-setting-rows"></div>
+        <p class="route-settings-help" id="route-inputs-reset-row" hidden><button type="button" id="route-inputs-reset" class="route-link-button">직접 넣은 수수료·출금비 모두 지우기</button></p>
+      </div>
+    </details>
+    </div>
+    <!-- One view: choose the asset/place to sell and the asset/place to receive; the amount typed in is the basis. -->
+    <h3 class="pick-title">거래 조건 입력</h3>
+    <p class="pick-lead">매도 또는 매수 수량 하나를 입력하면 나머지는 자동 계산됩니다.</p>
+    <div class="route-pick">
+      <label class="pick-field"><span>매도 자산</span><select id="route-from-asset" data-default="krw"></select></label>
+      <label class="pick-field"><span>보유 위치</span><select id="route-from-place" data-default="any"></select></label>
+      <label class="pick-field"><span>매도 수량</span><input id="route-amount" type="number" min="0" step="any" inputmode="decimal" placeholder="입력 또는 계산 결과"></label>
+      <label class="pick-field"><span>매수 자산</span><select id="route-to-asset" data-default="bmb"></select></label>
+      <label class="pick-field"><span>수령처</span><select id="route-to-place" data-default="any"></select></label>
+      <label class="pick-field"><span>매수 수량</span><input id="route-get-amount" type="number" min="0" step="any" inputmode="decimal" placeholder="입력 또는 계산 결과"></label>
+    </div>
+    <details class="help pick-help"><summary>참고</summary>
+      <ul>
+        <li>매도 수량을 넣으면 최대 매수 수량을, 매수 수량을 넣으면 최소 매도 수량을 자동으로 계산하여 보여줍니다.</li>
+        <li>보유 위치 '전체'는 이용 거래소와 개인 지갑을 모두 비교합니다.</li>
+        <li>수령처를 '지정 안 함'으로 두면 매수한 곳에서 끝납니다(LBank 매수는 LBank, 유니스왑 매수는 개인 지갑 WBMB).</li>
+      </ul>
+    </details>
+
+    <!-- Results (route calculation), in the same title + lead + indented content layout as above -->
+    <div id="route-simulator">
+    <h3 class="pick-title">조회 결과</h3>
+    <p class="pick-lead">계산상 유리한 경로부터 보여 줍니다.</p>
+    <div class="route-run-row"><button type="button" id="route-run" class="route-button">다시 조회</button>
+      <span class="route-busy" aria-hidden="true"><span class="route-spinner"></span><span id="route-elapsed"></span></span>
+      <p id="route-status" class="route-status" role="status" aria-live="polite">조건을 고르면 바로 계산합니다.</p>
+      <div class="route-progress" aria-hidden="true"><div id="route-progress-bar"></div></div></div>
+    <div id="route-results"></div>
+    <details class="route-basis">
+      <summary>참고</summary>
+      <ul>
+        <li>자동 조회 값: 빗썸·바이낸스·LBank 호가, 유니스왑 견적, 세 거래소의 USDT 출금비와 입출금 가능 여부, LBank BMB 출금비.</li>
+        <li>유니스왑 견적은 풀 경로 기준입니다(UniswapX와 가스비 제외). 유니스왑 앱 기본 설정은 UniswapX 견적을 포함하므로 조회 결과와 다소 차이가 있을 수 있습니다.</li>
+        <li>근거(호가): <a href="https://api.bithumb.com/v1/orderbook?markets=KRW-USDT,KRW-BTC,KRW-ETH" target="_blank" rel="noopener">빗썸 USDT·BTC·ETH 원화</a> · <a href="https://data-api.binance.vision/api/v3/depth?symbol=BTCUSDT&amp;limit=100" target="_blank" rel="noopener">바이낸스 BTC/USDT</a>(ETH·BNB는 주소의 BTC만 바꿈) · <a href="https://api.lbkex.com/v2/depth.do?symbol=bmb_usdt&amp;size=100" target="_blank" rel="noopener">LBank BMB/USDT</a></li>
+        <li>근거(USDT): <a href="https://api.bithumb.com/v2/fee/inout/USDT" target="_blank" rel="noopener">빗썸 출금비</a> · <a href="https://api.bithumb.com/public/assetsstatus/multichain/USDT" target="_blank" rel="noopener">빗썸 입출금 상태</a> · <a href="https://api.lbank.info/v2/assetConfigs.do?assetCode=usdt" target="_blank" rel="noopener">LBank 출금비·입출금 상태</a> · <a href="https://www.binance.com/bapi/capital/v2/public/capital/config/getOne?coin=USDT&amp;lang=en" target="_blank" rel="noopener">바이낸스 출금비</a></li>
+      </ul>
+    </details>
+    </div>
+
+  </section>
+
+  <footer>
+    <details class="foot-sec">
+      <summary>계산 방식</summary>
+      견적·체결가·매도량은 조회 시점의 호가창과 유니스왑 풀 상태로 계산한 추정값이며, 실제 체결 결과와 다를 수 있습니다.<br>
+      유니스왑은 여러 풀에 나눠 수령량이 최대가 되도록 계산합니다. 후보 풀 차이로 앱 견적과 다소 다를 수 있습니다.<br>
+      UniswapX 견적과 가스비(BMB ↔ WBMB 전환 포함)는 반영하지 않습니다.
+    </details>
+    <details class="foot-sec">
+      <summary>데이터 갱신 주기</summary>
+      10초: 유니스왑 풀 가격·빗썸 USDT·LBank 호가<br>
+      30초: 경로 조회 결과<br>
+      10분: 시장가 그래프·LBank 출금비<br>
+      조회할 때마다: 빗썸·바이낸스 호가·출금비·입출금 상태<br>
+      주기 수집: 미리 모아 둔 값(대부분 5분, 풀 목록 6시간 간격)
+    </details>
+    <details class="foot-sec">
+      <summary>출처</summary>
+      빗썸 USDT 환율: <code>wss://ws-api.bithumb.com/websocket/v1</code>(끊기면 <code>api.bithumb.com/v1/ticker</code>)<br>
+      빗썸 원화 호가: <code>api.bithumb.com/v1/orderbook</code><br>
+      빗썸 출금비: <code>api.bithumb.com/v2/fee/inout</code><br>
+      빗썸 입출금 상태: <code>api.bithumb.com/public/assetsstatus/multichain</code><br>
+      바이낸스 BTC·ETH·BNB/USDT 호가: <code>data-api.binance.vision/api/v3/depth</code><br>
+      바이낸스 출금비: <code>www.binance.com/bapi/capital</code><br>
+      LBank 가격·호가: <code>wss://api.lbank.info/ws/V2/</code><br>
+      LBank 1시간 봉: <code>api.lbkex.com/v2/kline.do</code><br>
+      LBank 출금비·입출금 가능 여부: <code>api.lbank.info/v2/assetConfigs.do</code>(주기 수집)<br>
+      유니스왑 풀 가격·견적: <code>bsc-dataseed.binance.org</code>, 응답이 늦을 때 <code>bsc-rpc.publicnode.com</code> (풀매니저 <code>0x28e2ea09…e9df</code>, 견적은 Multicall3 <code>0xcA11…CA11</code>로 묶어 물음)<br>
+      유니스왑 견적용 풀·경로 목록: <code>data/uni-pools.json</code>(GeckoTerminal 풀 목록을 체인에서 확인해 만듦, 주기 수집)<br>
+      유니스왑 1시간 봉·거래대금: On-chain data powered by <a href="https://www.geckoterminal.com/" target="_blank" rel="noopener">GeckoTerminal</a>(주기 수집)<br>
+      GeckoTerminal에서 받지 못한 시간: BSC 스왑 기록 <code>bsc-rpc.publicnode.com</code>(주기 수집)<br>
+    </details>
+    <br>
+    <strong style="color:var(--muted)">문의사항</strong><br>
+    <a href="mailto:Skippy0813g@gmail.com">Skippy0813g@gmail.com</a>
+  </footer>
+</div>
+
+<script src="engine.js"></script>
+<script src="common.js"></script>
+<script src="trade.js"></script>
+</body>
+</html>

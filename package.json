@@ -1,0 +1,15 @@
+{
+  "name": "btcmobick-trade",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "BTCMobick(BMB) 거래 경로 비교 페이지",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check-fees": "node src/check-fees.mjs --all",
+    "check-gecko": "node src/uni-gecko.mjs site/data/uni-gecko.json --no-trades",
+    "uni-pools": "node src/uni-pools.mjs site/data/uni-pools.json",
+    "check-uni-pools": "node src/check-uni-pools.mjs"
+  }
+}
