@@ -154,7 +154,7 @@
     .route-pick { grid-template-columns: 1fr 1fr; }
     .route-pick-label { grid-column: 1 / -1; margin-top: 4px; }
     .route-pick .pick-field:has(input), .route-pick button { grid-column: 1 / -1; }
-    .route-pick .pick-arrow { display: block; grid-column: 1 / -1; text-align: center; line-height: 1; color: var(--faint); font-size: 13px; }
+    .route-pick .pick-arrow { display: block; grid-column: 1 / -1; text-align: center; line-height: 1; margin: 2px 0; color: var(--accent); font-size: 22px; font-weight: 700; }
   }
   /* Every block at the top of the trade tab is title (pick-title) + one gray lead line (pick-lead) + content; folding rows match the title size. */
   .route-settings { margin-top: 12px; }
@@ -195,9 +195,16 @@
   .route-status { margin: 12px 0 0; font-size: 12px; color: var(--muted); }
   .route-card { border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px; margin-top: 10px; }
   .route-card h3 { font-size: 14px; margin: 0 0 4px; }
-  .route-best { display: inline-block; margin-right: 5px; padding: 2px 5px; border-radius: 3px; background: var(--accent); color: white; font-size: 10px; vertical-align: 1px; }
+  .route-best { display: inline-block; margin-bottom: 5px; padding: 2px 5px; border-radius: 3px; background: var(--accent); color: white; font-size: 10px; }
   .route-card p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
-  .route-card .route-amount { font: 600 18px var(--sans); font-variant-numeric: tabular-nums; color: var(--ink); }
+  .route-card .route-amount { margin: 0; font: 600 15px var(--sans); font-variant-numeric: tabular-nums; color: var(--ink); }
+  .route-card-best .route-amount { font-size: 18px; }
+  .route-card p.route-meta { margin-top: 2px; }
+  .route-card p.route-gap { margin-top: 2px; color: var(--warn); }
+  /* Path as vertical steps: one line per step, dots on a thin rail */
+  .route-path { list-style: none; margin: 10px 0 0; padding: 0 0 0 12px; border-left: 2px solid var(--line); }
+  .route-card .route-path li { position: relative; padding: 2px 0; font-size: 13px; color: var(--ink); }
+  .route-path li::before { content: ""; position: absolute; left: -16px; top: 9px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
   .route-card .route-steps { font-size: 13px; color: var(--ink); }
   .route-card details { margin-top: 7px; font-size: 12px; color: var(--muted); }
   .route-card summary { cursor: pointer; }
@@ -353,9 +360,6 @@
   .route-run-row.busy-manual #route-run::before { margin-right: 6px; vertical-align: -2px; border-color: rgba(255, 255, 255, .4); border-top-color: white; }
   .route-run-row.busy-manual #route-run:disabled { opacity: .75; }
   @keyframes route-spin { to { transform: rotate(360deg); } }
-  .trade-verdict { margin: 10px 0 8px; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--accent-soft); font-size: 14px; }
-  .trade-verdict b { font-size: 16px; font-variant-numeric: tabular-nums; }
-  .trade-verdict small { margin-left: 6px; color: var(--muted); font-size: 12px; }
   .trade-settings { margin: 0 0 4px; }
   .trade-settings > .pick-title:first-child { margin-top: 0; }
   .route-exchange-list { margin-top: 6px; }

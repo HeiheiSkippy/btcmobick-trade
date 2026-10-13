@@ -606,14 +606,16 @@ function routeFeeQty(value, node) {
 }
 // Path name. Transfer steps read "to X", so a path that starts with one also names where it starts
 // ("빗썸 USDT → 바이낸스로 송금 → ...").
-function routePathName(path) {
+function routePathSteps(path) {
   var labels = routeGroupSteps(path).map(routeGroupLabel);
   if (path[0].kind === "transfer") labels[0] = routeNodeName(path[0].from) + " → " + path[0].label.replace(/ (USDT|BMB|BTC|BNB) /, " ");
-  return labels.join(" → ");
+  return labels;
 }
-function routeCard(result, destination, scenario, best, referenceOut, amountHtml) {
-  var path = result.path, out = result.out;
-  var names = routePathName(path);
+function routePathName(path) { return routePathSteps(path).join(" → "); }
+// Result card: the amounts first (in -> out), then one line of context (top card) or the gap to the top path (others),
+// then the path as a vertical list of steps, then per-step details folded.
+function routeCard(result, opts) {
+  var path = result.path;
   // Details are not grouped: each trade is numbered, since consecutive Uniswap steps are separate swaps for the user.
   var detail = result.steps.map(function (step) {
     var info = step.info || {};
@@ -623,11 +625,12 @@ function routeCard(result, destination, scenario, best, referenceOut, amountHtml
     return '<li><strong>' + routeEscape(step.edge.label + (info.network ? " (" + info.network + ")" : "")) + '</strong><span class="route-qty">' + routeQty(step.input, step.edge.from) + ' ' + routeUnit(step.edge.from) +
       ' → ' + routeQty(step.output, step.edge.to) + ' ' + routeUnit(step.edge.to) + '</span>' + fee + '</li>';
   }).join("");
-  return '<article class="route-card"><h3>' +
-    (best ? '<span class="route-best">최적 경로</span> ' : '') + names + '</h3>' +
-    (amountHtml ? '<div class="route-amount">' + amountHtml + '</div>' : '<div class="route-amount">' + routeShortQty(out, destination) +
-    ' ' + routeUnit(destination) + ' ' + routeChangeHtml(path[0].from, destination, out) + '</div>') +
-    (referenceOut > out ? '<p>최대 경로보다 ' + routeShortQty(referenceOut - out, destination) + ' ' + routeUnit(destination) + ' 적음</p>' : '') +
+  return '<article class="route-card' + (opts.best ? ' route-card-best' : '') + '">' +
+    (opts.best ? '<span class="route-best">최적 경로</span>' : '') +
+    '<h3 class="route-amount">' + opts.main + '</h3>' +
+    (opts.meta ? '<p class="route-meta">' + opts.meta + '</p>' : '') +
+    (opts.gap ? '<p class="route-gap">' + opts.gap + '</p>' : '') +
+    '<ul class="route-path">' + routePathSteps(path).map(function (s) { return '<li>' + routeEscape(s) + '</li>'; }).join("") + '</ul>' +
     // Per-step amounts, fees and basis are folded under details. Open state is remembered per path (step id list) across auto refreshes.
     helpHtml("route-" + path.map(function (e) { return e.id; }).join(">"), "상세",
       '<ol class="route-steps-detail">' + detail + '</ol>') + '</article>';
@@ -793,25 +796,21 @@ async function runRouteSimulator(auto) {
     var top = sorted[0];
     var num = routeShortQty;
     var endOf = function (r) { return r.path[r.path.length - 1].to; };
-    var lineOf = function (r) {
-      var where = " <small>" + routeEscape(routeNodeName(endOf(r))) + " 수령</small>";
-      return "<b>" + num(r.cost, r.path[0].from) + " " + routeUnit(r.path[0].from) + "</b> 소요 → " + num(r.out, endOf(r)) + " " + routeUnit(endOf(r)) + where;
+    // Every card shows in -> out. The top card adds where it starts and ends; the others show how much worse they are
+    // than the top path (more spent when solving backwards, less received otherwise).
+    var gapNode = inverse ? top.path[0].from : endOf(top);
+    var card = function (r, best) {
+      var inNode = r.path[0].from, outNode = endOf(r), input = inverse ? r.cost : amount;
+      var main = num(input, inNode) + " " + routeUnit(inNode) + " → " + num(r.out, outNode) + " " + routeUnit(outNode);
+      if (best) return routeCard(r, { best: true, main: main,
+        meta: "소요 → 수령 · " + routeEscape(routeNodeName(inNode)) + " 출발 · " + routeEscape(routeNodeName(outNode)) + " 수령" +
+          (inverse ? "" : " " + routeChangeHtml(inNode, outNode, r.out)) });
+      var shown = num(inverse ? r.cost - top.cost : top.out - r.out, gapNode);
+      var gap = Number(shown.replace(/,/g, "")) === 0 ? "최적 경로와 같음"
+        : "최적 경로보다 " + shown + " " + routeUnit(gapNode) + (inverse ? " 더 듦" : " 적게 수령");
+      return routeCard(r, { main: main, gap: gap });
     };
-    var card = function (r, best) { return inverse ? routeCard(r, endOf(r), scenario, best, null, lineOf(r)) : routeCard(r, endOf(r), scenario, best, top.out); };
-    // Gap to the next path as an amount (less spent when solving backwards, more received otherwise). Paths that tie the top
-    // (e.g. differing only by a free conversion) are skipped; compare with the first one that differs at display precision.
-    var gapNode = inverse ? top.path[0].from : endOf(top), gapUnit = routeUnit(gapNode);
-    var gapOf = function (r) { var d = inverse ? r.cost - top.cost : top.out - r.out; return { d: d, shown: num(d, gapNode) }; };
-    var next = sorted.slice(1).map(gapOf).find(function (g) { return Number(g.shown.replace(/,/g, "")) !== 0; });
-    var gapText = next ? "다음 경로보다 " + next.shown + " " + gapUnit + (inverse ? " 저렴" : " 더 수령") : null;
-    // Summary line: minimum spend when the receive amount is the basis, maximum receive when the send amount is; plus the gap to second place.
-    html += '<p class="trade-verdict">' + (inverse
-        ? boardQty(amount) + " " + routeUnit("x-" + query.to[1]) + " 수령 · 최소 소요 <b>" + num(top.cost, top.path[0].from) + " " + routeUnit(top.path[0].from) + "</b>" +
-          " <small>" + routeEscape(routeNodeName(top.path[0].from)) + " 출발"
-        : boardQty(amount) + " " + routeUnit("x-" + query.from[1]) + " 기준 · 최대 수령 <b>" + num(top.out, endOf(top)) + " " + routeUnit(endOf(top)) + "</b>" +
-          " <small>" + routeEscape(routeNodeName(endOf(top))) + " 수령") +
-      (gapText ? " · " + gapText : "") + "</small></p>" +
-      ranked.map(function (r, i) { return card(r, i === 0); }).join("") +
+    html += ranked.map(function (r, i) { return card(r, i === 0); }).join("") +
       (rest.length ? '<details class="route-more"><summary>다른 경로 ' + Math.min(rest.length, 5) + "개</summary>" +
         rest.slice(0, 5).map(function (r) { return card(r, false); }).join("") +
         (rest.length > 5 ? '<p class="route-status">나머지 ' + rest.length + "개 중 상위 5개만 보여 줍니다.</p>" : "") + "</details>" : "");
