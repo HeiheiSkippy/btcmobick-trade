@@ -193,7 +193,16 @@
   .route-basis ul { margin: 6px 0 0; padding-left: 18px; }
   .route-basis li { padding: 2px 0; }
   .route-status { margin: 12px 0 0; font-size: 12px; color: var(--muted); }
-  .route-card { border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px; margin-top: 10px; }
+  .route-card, .route-venues { border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px; margin-top: 10px; }
+  .route-venues h3 { font-size: 14px; margin: 0; }
+  .route-venues-note { margin: 2px 0 6px; font-size: 12px; color: var(--muted); }
+  .route-venues table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .route-venues th, .route-venues td { padding: 4px 0; border-top: 1px solid var(--line); }
+  .route-venues th { text-align: left; font-weight: 400; color: var(--ink); }
+  .route-venues th small { color: var(--muted); font-size: 12px; }
+  .route-venues td { text-align: right; white-space: nowrap; color: var(--ink); }
+  .route-venues .best { color: var(--accent); }
+  .route-venues .gap { color: var(--warn); font-weight: 600; }
   .route-card h3 { font-size: 14px; margin: 0 0 4px; }
   .route-best { display: inline-block; margin-bottom: 5px; padding: 2px 5px; border-radius: 3px; background: var(--accent); color: white; font-size: 10px; }
   .route-card p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
@@ -259,22 +268,27 @@
 
   /* Layout: summary + tabs */
   /* Market price chart: Uniswap = blue, LBank = orange (dataviz default palette 1 and 2). */
-  .summary { --c-uni: #2a78d6; --c-lbank: #eb6834; }
-  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .summary { --c-uni: #3987e5; --c-lbank: #d95926; } }
-  :root[data-theme="dark"] .summary { --c-uni: #3987e5; --c-lbank: #d95926; }
+  .summary { --c-uni: #2a78d6; --c-lbank: #eb6834; --c-btc: #7d8590; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .summary { --c-uni: #3987e5; --c-lbank: #d95926; --c-btc: #9aa1ab; } }
+  :root[data-theme="dark"] .summary { --c-uni: #3987e5; --c-lbank: #d95926; --c-btc: #9aa1ab; }
   .market-chart { margin: 0; min-width: 0; position: relative; font-size: 11.5px; color: var(--muted); }
   /* Legend doubling as current price: line color mark + price (USDT) + small KRW */
   .market-now { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin: -2px 0 16px; font-size: 13px; color: var(--muted); }
   .market-now i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: 4px; }
   .market-now i.uni { background: var(--c-uni); }
   .market-now i.lbank { background: var(--c-lbank); }
+  .market-now i.btc { background: repeating-linear-gradient(90deg, var(--c-btc) 0 4px, transparent 4px 7px); }
+  .market-chart svg text.btc { fill: var(--c-btc); }
   .market-now b { font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
   .market-now small { margin-left: 5px; font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
   .market-chart svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: pan-y; }
   .market-chart svg text { fill: var(--faint); font-family: var(--mono); font-size: 10.5px; }
   .market-chart .grid { stroke: var(--line-soft); stroke-width: 1; }
-  .market-chart .tip { position: absolute; pointer-events: none; padding: 5px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface);
-    color: var(--ink); font-size: 12px; line-height: 1.45; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  .market-chart .tip { visibility: hidden; display: flex; flex-wrap: wrap; column-gap: 10px; row-gap: 1px; min-height: 2.9em; margin-bottom: 4px; padding: 4px 8px;
+    border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--ink); font-size: 12px; line-height: 1.45; box-sizing: border-box; }
+  .market-chart .tip span { white-space: nowrap; }
+  @media (max-width: 520px) { .market-chart .tip { min-height: calc(3 * 1.45em + 10px); } }
+  .market-chart .tip small { color: var(--muted); font-size: 11px; }
   .market-chart .tip b { font-family: var(--mono); font-weight: 600; }
   .market-chart figcaption { margin-top: 2px; color: var(--faint); font-size: 11px; }
   .summary-rates { flex-direction: row; flex-wrap: wrap; gap: 8px; margin-top: 6px; }

@@ -635,6 +635,36 @@ function routeCard(result, opts) {
     helpHtml("route-" + path.map(function (e) { return e.id; }).join(">"), "상세",
       '<ol class="route-steps-detail">' + detail + '</ol>') + '</article>';
 }
+// Venue comparison above the results: the best path per BMB venue among paths with no transfer step,
+// i.e. assets already sitting at that venue. Shown only when BMB/WBMB is on one side and two or more venues have a result.
+// sorted is best-first; the value is the computed side (cost when solving backwards, otherwise received).
+var ROUTE_BMB_VENUES = { dex: "유니스왑", lbank: "LBank", mania: "모빅매니아" };
+function routeVenueTable(sorted, inverse, query) {
+  var bmb = function (a) { return a === "bmb" || a === "wbmb"; };
+  if (!bmb(query.from[1]) && !bmb(query.to[1])) return "";
+  var rows = [], seen = {};
+  sorted.forEach(function (r) {
+    if (r.path.some(function (e) { return e.kind === "transfer" || e.kind === "bithumb" || e.kind === "binance"; })) return;
+    var trades = r.path.filter(function (e) { return ROUTE_BMB_VENUES[e.kind]; });
+    if (!trades.length || trades.some(function (e) { return e.kind !== trades[0].kind; }) || seen[trades[0].kind]) return;
+    seen[trades[0].kind] = true;
+    rows.push({ venue: trades[0].kind, r: r });
+  });
+  if (rows.length < 2) return "";
+  var node = function (r) { return inverse ? r.path[0].from : r.path[r.path.length - 1].to; };
+  var value = function (r) { return inverse ? r.cost : r.out; };
+  var top = rows[0].r;
+  return '<section class="route-venues"><h3>거래소별 비교</h3><p class="route-venues-note">송금 없이 각 거래소 잔고로 거래할 때 비교</p><table>' +
+    rows.map(function (row, i) {
+      var r = row.r, start = r.path[0].from, n = node(r);
+      var held = start === "mania-krw" ? "원화" : routeNodeName(start);
+      // The gap uses the same decimals as the values beside it.
+      var a = routeAsset(n), diff = fmt(Math.abs(value(r) - value(top)), a === "krw" ? 0 : a === "btc" ? 6 : value(top) >= 100 ? 2 : 4);
+      var cell = i === 0 ? '<b class="best">' + routeShortQty(value(r), n) + '</b>'
+        : routeShortQty(value(r), n) + ' <span class="gap">' + (Number(diff.replace(/,/g, "")) === 0 ? "같음" : (inverse ? "+" : "−") + diff) + '</span>';
+      return '<tr><th scope="row">' + ROUTE_BMB_VENUES[row.venue] + ' <small>(' + routeEscape(held) + ')</small></th><td>' + cell + ' ' + routeUnit(n) + '</td></tr>';
+    }).join("") + '</table></section>';
+}
 function routeFailure(path, reason) {
   var names = routePathName(path);
   var safe = String(reason || "견적 실패").replace(/[&<>"']/g, function (c) {
@@ -810,7 +840,7 @@ async function runRouteSimulator(auto) {
         : "최적 경로보다 " + shown + " " + routeUnit(gapNode) + (inverse ? " 더 듦" : " 적게 수령");
       return routeCard(r, { main: main, gap: gap });
     };
-    html += ranked.map(function (r, i) { return card(r, i === 0); }).join("") +
+    html += routeVenueTable(sorted, inverse, query) + ranked.map(function (r, i) { return card(r, i === 0); }).join("") +
       (rest.length ? '<details class="route-more"><summary>다른 경로 ' + Math.min(rest.length, 5) + "개</summary>" +
         rest.slice(0, 5).map(function (r) { return card(r, false); }).join("") +
         (rest.length > 5 ? '<p class="route-status">나머지 ' + rest.length + "개 중 상위 5개만 보여 줍니다.</p>" : "") + "</details>" : "");

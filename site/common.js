@@ -381,8 +381,17 @@ function load() {
 // The last point is the current pool price and LBank's last websocket trade.
 // Bars are hourly volume in USDT. Uniswap = WBMB/MOVN pool volume (in MOVN) × MOVN/USDT price at that hour;
 // LBank = BMB traded × that hour's close. Points are [time ms, price, volume].
+// BTC = Binance BTC/USDT hourly close on its own right-hand axis, for comparing moves in the same hours.
 var CHART_DAYS = 7;
-var CHART = { uni: null, lbank: null, at: 0, stale: false }, chartHover = false;
+var CHART = { uni: null, lbank: null, btc: null, at: 0, stale: false }, chartHover = false;
+// Current BTC price (Binance ticker, every 10 seconds while visible): the legend value and the chart's last point.
+var BTC_NOW = null;
+function loadBtcNow() {
+  fetch("https://data-api.binance.vision/api/v3/ticker/price?symbol=BTCUSDT", { cache: "no-store" }).then(json).then(function (j) {
+    var v = Number(j && j.price);
+    if (v > 0) { BTC_NOW = v; renderMarketNow(); }
+  }, function () {});
+}
 
 // ── Uniswap hourly candles, large trades and 24h volume, from two files written by the collector ──
 // Visitors' browsers never call GeckoTerminal directly (30 requests/min per IP). Use data/uni-gecko.json, refreshed every 5 minutes,
@@ -451,7 +460,12 @@ function loadMarketChart() {
     fetch("data/lbank-kline.json", { cache: "no-cache" }).then(json).then(function (j) {
       return (j.candles || []).map(function (c) { return [c[0] * 1000, Number(c[1]), c[2] >= 0 ? Number(c[2]) * Number(c[1]) : null]; })
         .filter(function (c) { return c[1] > 0; });
-    }, function () { return null; })
+    }, function () { return null; }),
+    fetch("https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=" + (CHART_DAYS * 24 + 1), { cache: "no-store" })
+      .then(json).then(function (k) {
+        return (Array.isArray(k) ? k : []).map(function (c) { return [Number(c[0]), Number(c[4])]; })
+          .filter(function (c) { return isFinite(c[0]) && c[1] > 0; });
+      }, function () { return null; })
   ]).then(function (r) {
     // Base series is the saved GeckoTerminal candles, else the last GeckoTerminal candles remembered in this browser.
     // From the base's last (possibly incomplete) candle onward, on-chain history replaces and extends it when available.
@@ -471,8 +485,11 @@ function loadMarketChart() {
     }
     // If neither file has been refreshed for over an hour, warn that recent candles may be missing.
     var stale = !(UNI_GECKO && freshAt(UNI_GECKO.hoursAt, 60)) && !(UNI_HIST && freshAt(UNI_HIST.at, 60));
-    CHART = { uni: uni, lbank: r[2], at: Date.now(), stale: stale };
+    var btc = r[3] && r[3].length ? r[3] : CHART.btc;
+    if (!has(BTC_NOW) && btc && btc.length) BTC_NOW = btc[btc.length - 1][1];
+    CHART = { uni: uni, lbank: r[2], btc: btc, at: Date.now(), stale: stale };
     renderMarketChart();
+    renderMarketNow();
   });
 }
 function renderMarketChart() {
@@ -480,17 +497,21 @@ function renderMarketChart() {
   if (!CHART.at || chartHover) return;
   var now = Date.now(), x0 = now - CHART_DAYS * 86400000, x1 = now;
   function recent(list) { return (list || []).filter(function (p) { return p[0] >= x0; }); }
-  var uni = recent(CHART.uni), lb = recent(CHART.lbank);
+  var uni = recent(CHART.uni), lb = recent(CHART.lbank), btc = recent(CHART.btc);
   if (has(D.wbmbInMovn) && has(D.movnUsdt)) uni.push([now, D.wbmbInMovn * D.movnUsdt]);
   if (has(D.lbank)) lb.push([now, D.lbank]);
+  if (btc.length && has(BTC_NOW)) btc.push([now, BTC_NOW]);
   if (!uni.length && !lb.length) { box.innerHTML = '<p class="loading">그래프 자료를 받지 못했습니다.</p>'; return; }
   // Price on top (T..PB), volume bars below (VT..VB), dates at the bottom.
-  var W = Math.max(260, Math.round(box.clientWidth || 320)), L = 44, R = 8, T = 28, PB = 150, VT = 206, VB = 252, H = 298;
+  var W = Math.max(260, Math.round(box.clientWidth || 320)), L = 44, R = btc.length > 1 ? 50 : 8, T = 28, PB = 150, VT = 206, VB = 252, H = 298;
   var vals = uni.concat(lb).map(function (p) { return p[1]; });
   var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals), pad = Math.max((hi - lo) * 0.06, hi * 0.004);
   lo -= pad; hi += pad;
   var X = function (t) { return L + (t - x0) / (x1 - x0) * (W - L - R); };
   var Y = function (v) { return T + (hi - v) / (hi - lo) * (PB - T); };
+  var bv = btc.map(function (p) { return p[1]; }), bLo = Math.min.apply(null, bv), bHi = Math.max.apply(null, bv), bPad = Math.max((bHi - bLo) * 0.06, bHi * 0.002);
+  bLo -= bPad; bHi += bPad;
+  var YB = function (v) { return T + (bHi - v) / (bHi - bLo) * (PB - T); };
   // Hourly volume: merge both venues keyed by candle start hour.
   var vol = {}, volUni = 0, volLb = 0;
   function addVol(list, side) {
@@ -511,7 +532,7 @@ function renderMarketChart() {
     return [small > 0 ? "7일 합계 " + (bigLb ? "LBank" : "유니스왑") + "가 " + Math.round((big / small - 1) * 100) + "% 많음" : "7일 합계",
       "(" + (bigLb ? "LBank " + fmt(volLb, 0) + " · 유니스왑 " + fmt(volUni, 0) : "유니스왑 " + fmt(volUni, 0) + " · LBank " + fmt(volLb, 0)) + " USDT)"];
   }
-  var svg = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="유니스왑과 LBank의 BMB 시장가와 시간별 거래대금, USDT, 최근 7일">';
+  var svg = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="유니스왑과 LBank의 BMB 시장가, BTC 가격, 시간별 거래대금, USDT, 최근 7일">';
   if (volMax > 0) {
     var bw = Math.max(0.6, (W - L - R) / (CHART_DAYS * 24) - 0.4), VY = function (v) { return (VB - VT) * v / volMax; };
     svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + VB + '" y2="' + VB + '"/>' +
@@ -531,35 +552,46 @@ function renderMarketChart() {
     var v = lo + (hi - lo) * k / 2, yv = Y(v).toFixed(1);
     svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + yv + '" y2="' + yv + '"/>' +
       '<text x="' + (L - 4) + '" y="' + (Y(v) + 3.5).toFixed(1) + '" text-anchor="end">' + v.toFixed(1) + "</text>";
+    if (btc.length > 1) svg += '<text class="btc" x="' + (W - R + 4) + '" y="' + (Y(v) + 3.5).toFixed(1) + '">' + fmt(bLo + (bHi - bLo) * k / 2, 0) + "</text>";
   }
+  if (btc.length > 1) svg += '<text class="ax-title btc" x="' + (W - 4) + '" y="' + (T - 12) + '" text-anchor="end">BTC ↑</text>';
   svg += '<text class="ax-title" x="4" y="' + (T - 12) + '">↑ 가격 (USDT)</text>' +
     '<text class="ax-title" x="' + (W - R) + '" y="' + (PB + 16) + '" text-anchor="end">1시간 종가 · 맨 오른쪽은 현재가</text>';
   if (volMax > 0) svg += '<text class="ax-title" x="' + (W - R) + '" y="' + (H - 18) + '" text-anchor="end">1시간 거래대금 · ' + volCompare()[0] + '</text>' +
     '<text class="ax-title" x="' + (W - R) + '" y="' + (H - 4) + '" text-anchor="end">' + volCompare()[1] + "</text>";
-  // Date ticks at KST midnight.
-  for (var t = Math.ceil((x0 + 9 * 3600000) / 86400000) * 86400000 - 9 * 3600000; t <= x1; t += 86400000) {
+  // Date ticks at KST midnight, counted back from the latest one. A label like "10/10" is about 32px wide,
+  // so on narrow screens every other day is labeled to keep them from running together.
+  var dayStep = (W - L - R) / CHART_DAYS < 38 ? 2 : 1;
+  for (var t = Math.floor((x1 + 9 * 3600000) / 86400000) * 86400000 - 9 * 3600000; t >= x0; t -= dayStep * 86400000) {
     var dt = new Date(t + 9 * 3600000);
-    if (X(t) - L < 12 || W - R - X(t) < 12) continue;
+    if (X(t) - L < 16 || W - R - X(t) < 16) continue;
     svg += '<text x="' + X(t).toFixed(1) + '" y="' + (VB + 14) + '" text-anchor="middle">' + (dt.getUTCMonth() + 1) + "/" + dt.getUTCDate() + "</text>";
   }
   function line(list, color) {
     return list.length > 1 ? '<polyline fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" points="' +
       list.map(function (p) { return X(p[0]).toFixed(1) + "," + Y(p[1]).toFixed(1); }).join(" ") + '"/>' : "";
   }
+  if (btc.length > 1) svg += '<polyline fill="none" stroke="var(--c-btc)" stroke-width="1.5" stroke-dasharray="4 3" stroke-linejoin="round" points="' +
+    btc.map(function (p) { return X(p[0]).toFixed(1) + "," + YB(p[1]).toFixed(1); }).join(" ") + '"/>';
   svg += line(lb, "var(--c-lbank)") + line(uni, "var(--c-uni)");
   svg += '<line id="mc-cross" x1="0" x2="0" y1="' + T + '" y2="' + VB + '" stroke="var(--faint)" stroke-dasharray="3 3" visibility="hidden"/>' +
+    '<circle id="mc-dot-b" r="3" fill="var(--c-btc)" visibility="hidden"/><circle id="mc-dot-l" r="3.5" fill="var(--c-lbank)" visibility="hidden"/>' +
+    '<circle id="mc-dot-u" r="3.5" fill="var(--c-uni)" visibility="hidden"/>' +
     '<rect id="mc-hit" x="' + L + '" y="0" width="' + (W - L - R) + '" height="' + H + '" fill="transparent"/></svg>';
   // The current-price line above the chart (#market-now) serves as the legend.
-  box.innerHTML = svg +
-    '<div class="tip" id="mc-tip" hidden></div><figcaption>' + (lb.length ? "" : "LBank 봉을 받지 못함 · ") +
+  // Values at the pointed time go in a strip above the chart (space kept while empty), so they never cover the lines.
+  box.innerHTML = '<div class="tip" id="mc-tip"></div>' + svg + '<figcaption>' + (lb.length ? "" : "LBank 봉을 받지 못함 · ") +
     // Values filled from on-chain history come from the same trades, so no notice; warn only when both files are stale.
     (CHART.stale ? "유니스왑 최근 봉을 받지 못함 · " : "") +
     'On-chain data powered by <a href="https://www.geckoterminal.com/" target="_blank" rel="noopener">GeckoTerminal</a></figcaption>' +
     helpHtml("market-chart", "설명", "<p>가격: 유니스왑은 WBMB/MOVN 풀 가격 × MOVN/USDT 풀 가격, LBank는 BMB/USDT 체결가입니다.<br>" +
+      "BTC: 바이낸스 BTC/USDT 1시간 종가이며 오른쪽 축입니다(회색 점선). 현재가는 10초마다 받습니다.<br>" +
       "거래대금(USDT 환산): 유니스왑은 MOVN 거래량 × MOVN 가격, LBank는 BMB 거래량 × 종가입니다. 막대는 두 곳을 쌓은 것입니다(파랑 유니스왑 · 주황 LBank).<br>" +
-      "그래프를 가리키면 그 시각의 가격·차이·거래대금이 나옵니다.</p>");
-  // Hover (or press and drag on phones) shows both prices and their gap at that time.
+      "그래프를 가리키면(휴대폰은 누르면) 그 시각의 가격·차이·거래대금이 그래프 위에 나옵니다. 휴대폰은 그래프 밖을 누르면 닫힙니다.</p>");
+  // Mouse: follows the pointer and clears on leave. Touch: a tap pins the values (dragging sideways moves them),
+  // and a tap outside the chart clears them (marketChartTipClose).
   var hit = $("mc-hit"), cross = $("mc-cross"), tip = $("mc-tip"), svgEl = box.querySelector("svg");
+  var dots = [["mc-dot-u", Y], ["mc-dot-l", Y], ["mc-dot-b", YB]].map(function (d) { return { el: $(d[0]), y: d[1] }; });
   function before(list, t) {
     var best = null;
     list.forEach(function (p) { if (p[0] <= t && (!best || p[0] > best[0])) best = p; });
@@ -573,27 +605,40 @@ function renderMarketChart() {
     // An hour is only a few px wide, so a wider zone would label the previous candle as current too.
     var isNow = t >= Math.floor(x1 / 3600000) * 3600000 || px >= W - R - 2;
     if (isNow) t = x1;
-    var u = before(uni, t), l = before(lb, t), dt = new Date(t + 9 * 3600000);
+    var u = before(uni, t), l = before(lb, t), b = before(btc, t), dt = new Date(t + 9 * 3600000);
     cross.setAttribute("x1", X(t)); cross.setAttribute("x2", X(t)); cross.setAttribute("visibility", "visible");
-    tip.innerHTML = (isNow ? "지금 " + String(dt.getUTCHours()).padStart(2, "0") + ":" + String(dt.getUTCMinutes()).padStart(2, "0") +
+    [u, l, b].forEach(function (p, i) {
+      var d = dots[i].el;
+      if (!p || (i === 2 && btc.length < 2)) { d.setAttribute("visibility", "hidden"); return; }
+      d.setAttribute("cx", X(t).toFixed(1)); d.setAttribute("cy", dots[i].y(p[1]).toFixed(1)); d.setAttribute("visibility", "visible");
+    });
+    var v = vol[Math.floor(t / 3600000)];
+    tip.innerHTML = [isNow ? "지금 " + String(dt.getUTCHours()).padStart(2, "0") + ":" + String(dt.getUTCMinutes()).padStart(2, "0") +
         " <small>(" + String(dt.getUTCHours()).padStart(2, "0") + "시 봉 진행 중)</small>"
-      : (dt.getUTCMonth() + 1) + "/" + dt.getUTCDate() + " " + String(dt.getUTCHours()).padStart(2, "0") + "시") +
-      (u ? "<br>유니스왑 <b>" + u[1].toFixed(2) + "</b>" : "") + (l ? "<br>LBank <b>" + l[1].toFixed(2) + "</b>" : "") +
-      (u && l ? "<br>LBank가 " + pct(l[1] / u[1] - 1) : "") +
-      (function () {
-        var v = vol[Math.floor(t / 3600000)];
-        return v && (v.u > 0 || v.l > 0) ? "<br>거래대금 유니스왑 <b>" + fmt(v.u, 0) + "</b> · LBank <b>" + fmt(v.l, 0) + "</b> USDT" : "";
-      })();
-    tip.hidden = false;
-    var left = (X(t) / W) * rect.width + 10;
-    if (left + tip.offsetWidth > rect.width) left = (X(t) / W) * rect.width - tip.offsetWidth - 10;
-    tip.style.left = Math.max(0, left) + "px";
-    tip.style.top = "22px";
+      : (dt.getUTCMonth() + 1) + "/" + dt.getUTCDate() + " " + String(dt.getUTCHours()).padStart(2, "0") + "시",
+      u ? "유니스왑 <b>" + u[1].toFixed(2) + "</b>" : "",
+      l ? "LBank <b>" + l[1].toFixed(2) + "</b>" + (u ? " <small>(" + pct(l[1] / u[1] - 1) + ")</small>" : "") : "",
+      b ? "BTC <b>" + fmt(b[1], 0) + "</b>" : "",
+      v && (v.u > 0 || v.l > 0) ? "거래대금 유니스왑 <b>" + fmt(v.u, 0) + "</b> · LBank <b>" + fmt(v.l, 0) + "</b> USDT" : ""]
+      .filter(Boolean).map(function (x) { return "<span>" + x + "</span>"; }).join("");
+    tip.style.visibility = "visible";
   }
+  function clear() {
+    chartHover = false;
+    cross.setAttribute("visibility", "hidden");
+    dots.forEach(function (d) { d.el.setAttribute("visibility", "hidden"); });
+    tip.style.visibility = "hidden";
+  }
+  marketChartTipClose = clear;
   hit.addEventListener("pointermove", move);
   hit.addEventListener("pointerdown", move);
-  hit.addEventListener("pointerleave", function () { chartHover = false; cross.setAttribute("visibility", "hidden"); tip.hidden = true; });
+  hit.addEventListener("pointerleave", function (e) { if (e.pointerType === "mouse") clear(); });
 }
+// Clears values pinned by a tap when the user taps anywhere outside the chart's plot area.
+var marketChartTipClose = null;
+document.addEventListener("pointerdown", function (e) {
+  if (marketChartTipClose && chartHover && !(e.target.closest && e.target.closest("#mc-hit"))) marketChartTipClose();
+});
 window.addEventListener("resize", function () { clearTimeout(renderMarketChart.t); renderMarketChart.t = setTimeout(renderMarketChart, 200); });
 
 // Balances of reference addresses: BSC via WBMB/MOVN balanceOf, Mobick chain via the explorer's chain_stats.
@@ -692,7 +737,9 @@ function renderMarketNow() {
       (has(v) ? "<b>" + v.toFixed(2) + "</b> USDT<small>(" + basis + (krw ? " · ₩" + fmt(v * krw, 0) : "") + ")</small>" : '<small>' + missing + "</small>") + "</span>";
   }
   $("market-now").innerHTML = item("uni", "유니스왑", uni, "풀 가격 기준 계산값", "받는 중") +
-    item("lbank", "LBank", lb, "마지막 체결가", LBK.state === "live" ? "체결 기다리는 중" : LBK.state === "failed" ? "연결 안 됨" : "연결 중");
+    item("lbank", "LBank", lb, "마지막 체결가", LBK.state === "live" ? "체결 기다리는 중" : LBK.state === "failed" ? "연결 안 됨" : "연결 중") +
+    (has(BTC_NOW) ? '<span class="now-item"><i class="btc"></i>BTC <b>' + fmt(BTC_NOW, 0) +
+      "</b> USDT<small>(바이낸스 · 10초마다" + (krw ? " · ₩" + fmt(BTC_NOW * krw, 0) : "") + ")</small></span>" : "");
 }
 var LBK = { state: "connecting", last: null, ask: null, asks: null, bids: null, depthAt: null, bid: null, ws: null, drawTimer: null, books: {} };
 
@@ -874,6 +921,7 @@ function commonStart() {
   everyVisible(pollPools, POOL_POLL_MS);
   // Market price chart: once at start, candles every 10 minutes, current price point every minute (deferred while hovering).
   setTimeout(loadMarketChart, 1200);
+  everyVisible(loadBtcNow, 10000);
   setInterval(function () { if (!document.hidden) loadMarketChart(); }, 10 * 60000);
   setInterval(function () { if (!document.hidden) renderMarketChart(); }, 60000);
 }
