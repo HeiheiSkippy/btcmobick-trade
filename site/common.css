@@ -284,10 +284,19 @@
   .market-chart svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: pan-y; }
   .market-chart svg text { fill: var(--faint); font-family: var(--mono); font-size: 10.5px; }
   .market-chart .grid { stroke: var(--line-soft); stroke-width: 1; }
-  .market-chart .tip { visibility: hidden; display: flex; flex-wrap: wrap; column-gap: 10px; row-gap: 1px; min-height: 2.9em; margin-bottom: 4px; padding: 4px 8px;
+  /* Values at the pointed time cover the current-price legend just above the chart, so they take no space and never cover the lines. */
+  .market-chart .tip { visibility: hidden; position: absolute; left: 0; right: 0; bottom: calc(100% + 4px); z-index: 1;
+    display: flex; flex-wrap: wrap; align-content: center; column-gap: 10px; row-gap: 1px; padding: 4px 8px;
     border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--ink); font-size: 12px; line-height: 1.45; box-sizing: border-box; }
   .market-chart .tip span { white-space: nowrap; }
-  @media (max-width: 520px) { .market-chart .tip { min-height: calc(3 * 1.45em + 10px); } }
+  /* Axis numbers drawn inside the plot get a halo so lines under them don't hurt legibility. */
+  .market-chart svg text.in { paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+  /* Phones: the chart spans the card's full width (out to its border) instead of stopping at the card padding. */
+  @media (max-width: 520px) {
+    .summary .market-chart { margin-inline: -18px; }
+    .summary .market-chart > figcaption, .summary .market-chart > details { padding-inline: 18px; }
+    .summary .market-chart .tip { left: 10px; right: 10px; }
+  }
   .market-chart .tip small { color: var(--muted); font-size: 11px; }
   .market-chart .tip b { font-family: var(--mono); font-weight: 600; }
   .market-chart figcaption { margin-top: 2px; color: var(--faint); font-size: 11px; }

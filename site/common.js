@@ -503,7 +503,9 @@ function renderMarketChart() {
   if (btc.length && has(BTC_NOW)) btc.push([now, BTC_NOW]);
   if (!uni.length && !lb.length) { box.innerHTML = '<p class="loading">그래프 자료를 받지 못했습니다.</p>'; return; }
   // Price on top (T..PB), volume bars below (VT..VB), dates at the bottom.
-  var W = Math.max(260, Math.round(box.clientWidth || 320)), L = 44, R = btc.length > 1 ? 50 : 8, T = 28, PB = 150, VT = 206, VB = 252, H = 298;
+  // On narrow screens (phones) axis numbers sit inside the plot edges instead of in side margins, so the lines get the full width.
+  var W = Math.max(260, Math.round(box.clientWidth || 320)), narrow = W < 480;
+  var L = narrow ? 8 : 44, R = narrow ? 8 : btc.length > 1 ? 50 : 8, T = 28, PB = 150, VT = 206, VB = 252, H = 298;
   var vals = uni.concat(lb).map(function (p) { return p[1]; });
   var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals), pad = Math.max((hi - lo) * 0.06, hi * 0.004);
   lo -= pad; hi += pad;
@@ -537,8 +539,9 @@ function renderMarketChart() {
     var bw = Math.max(0.6, (W - L - R) / (CHART_DAYS * 24) - 0.4), VY = function (v) { return (VB - VT) * v / volMax; };
     svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + VB + '" y2="' + VB + '"/>' +
       '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + VT + '" y2="' + VT + '"/>' +
-      '<text x="' + (L - 4) + '" y="' + (VT + 3.5) + '" text-anchor="end">' + fmt(volMax, 0) + "</text>" +
-      '<text x="' + (L - 4) + '" y="' + (VB) + '" text-anchor="end">0</text>' +
+      (narrow ? '<text class="in" x="' + (L + 2) + '" y="' + (VT + 11) + '">' + fmt(volMax, 0) + "</text>"
+        : '<text x="' + (L - 4) + '" y="' + (VT + 3.5) + '" text-anchor="end">' + fmt(volMax, 0) + "</text>" +
+          '<text x="' + (L - 4) + '" y="' + (VB) + '" text-anchor="end">0</text>') +
       '<text class="ax-title" x="4" y="' + (VT - 12) + '">↑ 거래대금 (USDT)</text>';
     Object.keys(vol).forEach(function (h) {
       var x = X(h * 3600000);
@@ -550,9 +553,13 @@ function renderMarketChart() {
   }
   for (var k = 0; k <= 2; k++) {
     var v = lo + (hi - lo) * k / 2, yv = Y(v).toFixed(1);
+    // Inside labels sit just above their grid line, except the top one, which goes below it to clear the axis titles.
+    var yIn = (k === 2 ? Y(v) + 11 : Y(v) - 3).toFixed(1);
     svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + yv + '" y2="' + yv + '"/>' +
-      '<text x="' + (L - 4) + '" y="' + (Y(v) + 3.5).toFixed(1) + '" text-anchor="end">' + v.toFixed(1) + "</text>";
-    if (btc.length > 1) svg += '<text class="btc" x="' + (W - R + 4) + '" y="' + (Y(v) + 3.5).toFixed(1) + '">' + fmt(bLo + (bHi - bLo) * k / 2, 0) + "</text>";
+      (narrow ? '<text class="in" x="' + (L + 2) + '" y="' + yIn + '">'
+        : '<text x="' + (L - 4) + '" y="' + (Y(v) + 3.5).toFixed(1) + '" text-anchor="end">') + v.toFixed(1) + "</text>";
+    if (btc.length > 1) svg += (narrow ? '<text class="btc in" x="' + (W - R - 2) + '" y="' + yIn + '" text-anchor="end">'
+      : '<text class="btc" x="' + (W - R + 4) + '" y="' + (Y(v) + 3.5).toFixed(1) + '">') + fmt(bLo + (bHi - bLo) * k / 2, 0) + "</text>";
   }
   if (btc.length > 1) svg += '<text class="ax-title btc" x="' + (W - 4) + '" y="' + (T - 12) + '" text-anchor="end">BTC ↑</text>';
   svg += '<text class="ax-title" x="4" y="' + (T - 12) + '">↑ 가격 (USDT)</text>' +
