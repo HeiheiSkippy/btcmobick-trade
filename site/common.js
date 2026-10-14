@@ -381,7 +381,6 @@ function load() {
 // The last point is the current pool price and LBank's last websocket trade.
 // Bars are hourly volume in USDT. Uniswap = WBMB/MOVN pool volume (in MOVN) × MOVN/USDT price at that hour;
 // LBank = BMB traded × that hour's close. Points are [time ms, price, volume].
-// BTC = Binance BTC/USDT hourly close on its own right-hand axis, for comparing moves in the same hours.
 var CHART_DAYS = 7;
 var CHART = { uni: null, lbank: null, btc: null, at: 0, stale: false }, chartHover = false;
 // Current BTC price (Binance ticker, every 10 seconds while visible): the legend value and the chart's last point.
@@ -503,7 +502,6 @@ function renderMarketChart() {
   if (btc.length && has(BTC_NOW)) btc.push([now, BTC_NOW]);
   if (!uni.length && !lb.length) { box.innerHTML = '<p class="loading">그래프 자료를 받지 못했습니다.</p>'; return; }
   // Price on top (T..PB), volume bars below (VT..VB), dates at the bottom.
-  // On narrow screens (phones) axis numbers sit inside the plot edges instead of in side margins, so the lines get the full width.
   var W = Math.max(260, Math.round(box.clientWidth || 320)), narrow = W < 480;
   var L = narrow ? 8 : 44, R = narrow ? 8 : btc.length > 1 ? 50 : 8, T = 28, PB = 150, VT = 206, VB = 252, H = 298;
   var vals = uni.concat(lb).map(function (p) { return p[1]; });
@@ -553,7 +551,6 @@ function renderMarketChart() {
   }
   for (var k = 0; k <= 2; k++) {
     var v = lo + (hi - lo) * k / 2, yv = Y(v).toFixed(1);
-    // Inside labels sit just above their grid line, except the top one, which goes below it to clear the axis titles.
     var yIn = (k === 2 ? Y(v) + 11 : Y(v) - 3).toFixed(1);
     svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + yv + '" y2="' + yv + '"/>' +
       (narrow ? '<text class="in" x="' + (L + 2) + '" y="' + yIn + '">'
@@ -586,7 +583,6 @@ function renderMarketChart() {
     '<circle id="mc-dot-u" r="3.5" fill="var(--c-uni)" visibility="hidden"/>' +
     '<rect id="mc-hit" x="' + L + '" y="0" width="' + (W - L - R) + '" height="' + H + '" fill="transparent"/></svg>';
   // The current-price line above the chart (#market-now) serves as the legend.
-  // Values at the pointed time overlay the current-price legend above the chart (see .market-chart .tip), so they never cover the lines.
   box.innerHTML = '<div class="tip" id="mc-tip"></div>' + svg + '<figcaption>' + (lb.length ? "" : "LBank 봉을 받지 못함 · ") +
     // Values filled from on-chain history come from the same trades, so no notice; warn only when both files are stale.
     (CHART.stale ? "유니스왑 최근 봉을 받지 못함 · " : "") +
@@ -595,8 +591,6 @@ function renderMarketChart() {
       "BTC: 바이낸스 BTC/USDT 1시간 종가이며 오른쪽 축입니다(회색 점선). 현재가는 10초마다 받습니다.<br>" +
       "거래대금(USDT 환산): 유니스왑은 MOVN 거래량 × MOVN 가격, LBank는 BMB 거래량 × 종가입니다. 막대는 두 곳을 쌓은 것입니다(파랑 유니스왑 · 주황 LBank).<br>" +
       "그래프를 가리키면(휴대폰은 누르면) 그 시각의 가격·차이·거래대금이 그래프 위에 나옵니다. 휴대폰은 그래프 밖을 누르면 닫힙니다.</p>");
-  // Mouse: follows the pointer and clears on leave. Touch: a tap pins the values (dragging sideways moves them),
-  // and a tap outside the chart clears them (marketChartTipClose).
   var hit = $("mc-hit"), cross = $("mc-cross"), tip = $("mc-tip"), svgEl = box.querySelector("svg");
   var dots = [["mc-dot-u", Y], ["mc-dot-l", Y], ["mc-dot-b", YB]].map(function (d) { return { el: $(d[0]), y: d[1] }; });
   function before(list, t) {
@@ -641,7 +635,6 @@ function renderMarketChart() {
   hit.addEventListener("pointerdown", move);
   hit.addEventListener("pointerleave", function (e) { if (e.pointerType === "mouse") clear(); });
 }
-// Clears values pinned by a tap when the user taps anywhere outside the chart's plot area.
 var marketChartTipClose = null;
 document.addEventListener("pointerdown", function (e) {
   if (marketChartTipClose && chartHover && !(e.target.closest && e.target.closest("#mc-hit"))) marketChartTipClose();

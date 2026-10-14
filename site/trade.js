@@ -635,9 +635,6 @@ function routeCard(result, opts) {
     helpHtml("route-" + path.map(function (e) { return e.id; }).join(">"), "상세",
       '<ol class="route-steps-detail">' + detail + '</ol>') + '</article>';
 }
-// Venue comparison above the results: the best path per BMB venue among paths with no transfer step,
-// i.e. assets already sitting at that venue. Shown only when BMB/WBMB is on one side and two or more venues have a result.
-// sorted is best-first; the value is the computed side (cost when solving backwards, otherwise received).
 var ROUTE_BMB_VENUES = { dex: "유니스왑", lbank: "LBank", mania: "모빅매니아" };
 function routeVenueTable(sorted, inverse, query) {
   var bmb = function (a) { return a === "bmb" || a === "wbmb"; };
@@ -658,7 +655,6 @@ function routeVenueTable(sorted, inverse, query) {
     rows.map(function (row, i) {
       var r = row.r, start = r.path[0].from, n = node(r);
       var held = start === "mania-krw" ? "원화" : routeNodeName(start);
-      // The gap uses the same decimals as the values beside it.
       var a = routeAsset(n), diff = fmt(Math.abs(value(r) - value(top)), a === "krw" ? 0 : a === "btc" ? 6 : value(top) >= 100 ? 2 : 4);
       var cell = i === 0 ? '<b class="best">' + routeShortQty(value(r), n) + '</b>'
         : routeShortQty(value(r), n) + ' <span class="gap">' + (Number(diff.replace(/,/g, "")) === 0 ? "같음" : (inverse ? "+" : "−") + diff) + '</span>';
