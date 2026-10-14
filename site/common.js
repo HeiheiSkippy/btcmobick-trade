@@ -586,7 +586,7 @@ function renderMarketChart() {
     '<circle id="mc-dot-u" r="3.5" fill="var(--c-uni)" visibility="hidden"/>' +
     '<rect id="mc-hit" x="' + L + '" y="0" width="' + (W - L - R) + '" height="' + H + '" fill="transparent"/></svg>';
   // The current-price line above the chart (#market-now) serves as the legend.
-  // Values at the pointed time go in a strip above the chart (space kept while empty), so they never cover the lines.
+  // Values at the pointed time overlay the current-price legend above the chart (see .market-chart .tip), so they never cover the lines.
   box.innerHTML = '<div class="tip" id="mc-tip"></div>' + svg + '<figcaption>' + (lb.length ? "" : "LBank 봉을 받지 못함 · ") +
     // Values filled from on-chain history come from the same trades, so no notice; warn only when both files are stale.
     (CHART.stale ? "유니스왑 최근 봉을 받지 못함 · " : "") +
