@@ -504,14 +504,18 @@ function renderMarketChart() {
   // Price on top (T..PB), volume bars below (VT..VB), dates at the bottom.
   var W = Math.max(260, Math.round(box.clientWidth || 320)), narrow = W < 480;
   var L = narrow ? 8 : 44, R = narrow ? 8 : btc.length > 1 ? 50 : 8, T = 28, PB = 150, VT = 206, VB = 252, H = 298;
-  var vals = uni.concat(lb).map(function (p) { return p[1]; });
-  var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals), pad = Math.max((hi - lo) * 0.06, hi * 0.004);
+  // Log scale shared by both axes, so equal heights mean equal % moves. BTC is shifted to start at the BMB line's height.
+  var hasBtc = btc.length > 1, ref = Math.log((uni[0] || lb[0])[1]), off = hasBtc ? ref - Math.log(btc[0][1]) : 0;
+  var logs = uni.concat(lb).map(function (p) { return Math.log(p[1]); })
+    .concat(hasBtc ? btc.map(function (p) { return Math.log(p[1]) + off; }) : []);
+  var lo = Math.min.apply(null, logs), hi = Math.max.apply(null, logs), pad = Math.max((hi - lo) * 0.06, 0.004);
   lo -= pad; hi += pad;
   var X = function (t) { return L + (t - x0) / (x1 - x0) * (W - L - R); };
-  var Y = function (v) { return T + (hi - v) / (hi - lo) * (PB - T); };
-  var bv = btc.map(function (p) { return p[1]; }), bLo = Math.min.apply(null, bv), bHi = Math.max.apply(null, bv), bPad = Math.max((bHi - bLo) * 0.06, bHi * 0.002);
-  bLo -= bPad; bHi += bPad;
-  var YB = function (v) { return T + (bHi - v) / (bHi - bLo) * (PB - T); };
+  var Y = function (v) { return T + (hi - Math.log(v)) / (hi - lo) * (PB - T); };
+  var YB = function (v) { return T + (hi - Math.log(v) - off) / (hi - lo) * (PB - T); };
+  // Grid step: the smallest of these percentages that leaves at most 6 intervals.
+  var stepPct = [1, 2, 5, 10, 20, 50].filter(function (s) { return (hi - lo) / Math.log(1 + s / 100) <= 6; })[0] || 100;
+  var step = Math.log(1 + stepPct / 100);
   // Hourly volume: merge both venues keyed by candle start hour.
   var vol = {}, volUni = 0, volLb = 0;
   function addVol(list, side) {
@@ -549,17 +553,17 @@ function renderMarketChart() {
       if (hl > 0) svg += '<rect x="' + x.toFixed(1) + '" y="' + (VB - hu - hl).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hl.toFixed(1) + '" fill="var(--c-lbank)"/>';
     });
   }
-  for (var k = 0; k <= 2; k++) {
-    var v = lo + (hi - lo) * k / 2, yv = Y(v).toFixed(1);
-    var yIn = (k === 2 ? Y(v) + 11 : Y(v) - 3).toFixed(1);
+  for (var k = Math.ceil((lo - ref) / step); ref + k * step <= hi; k++) {
+    var v = Math.exp(ref + k * step), y = Y(v), yv = y.toFixed(1);
+    var yIn = (y - T < 12 ? y + 11 : y - 3).toFixed(1);
     svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + yv + '" y2="' + yv + '"/>' +
       (narrow ? '<text class="in" x="' + (L + 2) + '" y="' + yIn + '">'
-        : '<text x="' + (L - 4) + '" y="' + (Y(v) + 3.5).toFixed(1) + '" text-anchor="end">') + v.toFixed(1) + "</text>";
-    if (btc.length > 1) svg += (narrow ? '<text class="btc in" x="' + (W - R - 2) + '" y="' + yIn + '" text-anchor="end">'
-      : '<text class="btc" x="' + (W - R + 4) + '" y="' + (Y(v) + 3.5).toFixed(1) + '">') + fmt(bLo + (bHi - bLo) * k / 2, 0) + "</text>";
+        : '<text x="' + (L - 4) + '" y="' + (y + 3.5).toFixed(1) + '" text-anchor="end">') + v.toFixed(1) + "</text>";
+    if (hasBtc) svg += (narrow ? '<text class="btc in" x="' + (W - R - 2) + '" y="' + yIn + '" text-anchor="end">'
+      : '<text class="btc" x="' + (W - R + 4) + '" y="' + (y + 3.5).toFixed(1) + '">') + fmt(v * Math.exp(-off), 0) + "</text>";
   }
-  if (btc.length > 1) svg += '<text class="ax-title btc" x="' + (W - 4) + '" y="' + (T - 12) + '" text-anchor="end">BTC ↑</text>';
-  svg += '<text class="ax-title" x="4" y="' + (T - 12) + '">↑ 가격 (USDT)</text>' +
+  if (hasBtc) svg += '<text class="ax-title btc" x="' + (W - 4) + '" y="' + (T - 12) + '" text-anchor="end">BTC ↑</text>';
+  svg += '<text class="ax-title" x="4" y="' + (T - 12) + '">↑ 가격 (USDT · 눈금 간격 ' + stepPct + '%)</text>' +
     '<text class="ax-title" x="' + (W - R) + '" y="' + (PB + 16) + '" text-anchor="end">1시간 종가 · 맨 오른쪽은 현재가</text>';
   if (volMax > 0) svg += '<text class="ax-title" x="' + (W - R) + '" y="' + (H - 18) + '" text-anchor="end">1시간 거래대금 · ' + volCompare()[0] + '</text>' +
     '<text class="ax-title" x="' + (W - R) + '" y="' + (H - 4) + '" text-anchor="end">' + volCompare()[1] + "</text>";
@@ -587,10 +591,9 @@ function renderMarketChart() {
     // Values filled from on-chain history come from the same trades, so no notice; warn only when both files are stale.
     (CHART.stale ? "유니스왑 최근 봉을 받지 못함 · " : "") +
     'On-chain data powered by <a href="https://www.geckoterminal.com/" target="_blank" rel="noopener">GeckoTerminal</a></figcaption>' +
-    helpHtml("market-chart", "설명", "<p>가격: 유니스왑은 WBMB/MOVN 풀 가격 × MOVN/USDT 풀 가격, LBank는 BMB/USDT 체결가입니다.<br>" +
-      "BTC: 바이낸스 BTC/USDT 1시간 종가이며 오른쪽 축입니다(회색 점선). 현재가는 10초마다 받습니다.<br>" +
-      "거래대금(USDT 환산): 유니스왑은 MOVN 거래량 × MOVN 가격, LBank는 BMB 거래량 × 종가입니다. 막대는 두 곳을 쌓은 것입니다(파랑 유니스왑 · 주황 LBank).<br>" +
-      "그래프를 가리키면(휴대폰은 누르면) 그 시각의 가격·차이·거래대금이 그래프 위에 나옵니다. 휴대폰은 그래프 밖을 누르면 닫힙니다.</p>");
+    helpHtml("market-chart", "참고", "<ul><li>유니스왑은 WBMB/MOVN 풀 가격 × MOVN/USDT 풀 가격, LBank는 BMB/USDT 체결가입니다.</li>" +
+      "<li>세로축은 로그 눈금이며, 양쪽 축의 눈금 간격은 같은 변동률입니다.</li>" +
+      "<li>거래대금(USDT 환산): 유니스왑은 MOVN 거래량 × MOVN 가격, LBank는 BMB 거래량 × 종가입니다. 막대는 두 곳을 쌓은 것입니다.</li></ul>");
   var hit = $("mc-hit"), cross = $("mc-cross"), tip = $("mc-tip"), svgEl = box.querySelector("svg");
   var dots = [["mc-dot-u", Y], ["mc-dot-l", Y], ["mc-dot-b", YB]].map(function (d) { return { el: $(d[0]), y: d[1] }; });
   function before(list, t) {
@@ -739,7 +742,10 @@ function renderMarketNow() {
   $("market-now").innerHTML = item("uni", "유니스왑", uni, "풀 가격 기준 계산값", "받는 중") +
     item("lbank", "LBank", lb, "마지막 체결가", LBK.state === "live" ? "체결 기다리는 중" : LBK.state === "failed" ? "연결 안 됨" : "연결 중") +
     (has(BTC_NOW) ? '<span class="now-item"><i class="btc"></i>BTC <b>' + fmt(BTC_NOW, 0) +
-      "</b> USDT<small>(바이낸스 · 10초마다" + (krw ? " · ₩" + fmt(BTC_NOW * krw, 0) : "") + ")</small></span>" : "");
+      "</b> USDT<small>(바이낸스" + (krw ? " · ₩" + fmt(BTC_NOW * krw, 0) : "") + ")</small></span>" : "");
+  // Redraw the chart so its rightmost point matches this line; updates arriving together are merged into one redraw.
+  clearTimeout(renderMarketChart.t);
+  renderMarketChart.t = setTimeout(renderMarketChart, 300);
 }
 var LBK = { state: "connecting", last: null, ask: null, asks: null, bids: null, depthAt: null, bid: null, ws: null, drawTimer: null, books: {} };
 
@@ -919,9 +925,8 @@ function commonStart() {
   load();
   everyVisible(load, 120000);
   everyVisible(pollPools, POOL_POLL_MS);
-  // Market price chart: once at start, candles every 10 minutes, current price point every minute (deferred while hovering).
+  // Market price chart: once at start, candles every 10 minutes; the current price point follows renderMarketNow (deferred while hovering).
   setTimeout(loadMarketChart, 1200);
   everyVisible(loadBtcNow, 10000);
   setInterval(function () { if (!document.hidden) loadMarketChart(); }, 10 * 60000);
-  setInterval(function () { if (!document.hidden) renderMarketChart(); }, 60000);
 }

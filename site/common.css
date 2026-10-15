@@ -168,7 +168,7 @@
   .trade-card .pick-lead { margin-bottom: 10px; }
   details.pick-help { margin: 8px 0 0; }
   .pick-arrow { display: none; }
-  details.pick-help ul { margin: 4px 0 0; padding-left: 18px; font-size: 12px; color: var(--muted); }
+  details.help ul { margin: 4px 0 0; padding-left: 0; list-style-position: inside; font-size: 12px; color: var(--muted); }
   .route-settings-help { margin: 0 0 6px; font-size: 12px; color: var(--muted); }
   .route-exchange-list { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; }
   .route-exchange-list input { accent-color: var(--accent); }
