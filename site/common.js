@@ -513,7 +513,6 @@ function renderMarketChart() {
   var X = function (t) { return L + (t - x0) / (x1 - x0) * (W - L - R); };
   var Y = function (v) { return T + (hi - Math.log(v)) / (hi - lo) * (PB - T); };
   var YB = function (v) { return T + (hi - Math.log(v) - off) / (hi - lo) * (PB - T); };
-  // Grid step: the smallest of these percentages that leaves at most 6 intervals.
   var stepPct = [1, 2, 5, 10, 20, 50].filter(function (s) { return (hi - lo) / Math.log(1 + s / 100) <= 6; })[0] || 100;
   var step = Math.log(1 + stepPct / 100);
   // Hourly volume: merge both venues keyed by candle start hour.
