@@ -502,8 +502,10 @@ function renderMarketChart() {
   if (btc.length && has(BTC_NOW)) btc.push([now, BTC_NOW]);
   if (!uni.length && !lb.length) { box.innerHTML = '<p class="loading">그래프 자료를 받지 못했습니다.</p>'; return; }
   // Price on top (T..PB), volume bars below (VT..VB), dates at the bottom.
+  // Narrow screens have no axis numbers; a scrub track at TK between the two charts picks the hour so the finger covers neither.
   var W = Math.max(260, Math.round(box.clientWidth || 320)), narrow = W < 480;
-  var L = narrow ? 8 : 44, R = narrow ? 8 : btc.length > 1 ? 50 : 8, T = 28, PB = 150, VT = 206, VB = 252, H = 298;
+  var L = narrow ? 8 : 44, R = narrow ? 8 : btc.length > 1 ? 50 : 8, T = 28, PB = 150, TK = 186;
+  var VT = narrow ? 236 : 206, VB = VT + 46, H = VB + 46;
   // Log scale shared by both axes, so equal heights mean equal % moves. BTC is shifted to start at the BMB line's height.
   var hasBtc = btc.length > 1, ref = Math.log((uni[0] || lb[0])[1]), off = hasBtc ? ref - Math.log(btc[0][1]) : 0;
   var logs = uni.concat(lb).map(function (p) { return Math.log(p[1]); })
@@ -540,8 +542,7 @@ function renderMarketChart() {
     var bw = Math.max(0.6, (W - L - R) / (CHART_DAYS * 24) - 0.4), VY = function (v) { return (VB - VT) * v / volMax; };
     svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + VB + '" y2="' + VB + '"/>' +
       '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + VT + '" y2="' + VT + '"/>' +
-      (narrow ? '<text class="in" x="' + (L + 2) + '" y="' + (VT + 11) + '">' + fmt(volMax, 0) + "</text>"
-        : '<text x="' + (L - 4) + '" y="' + (VT + 3.5) + '" text-anchor="end">' + fmt(volMax, 0) + "</text>" +
+      (narrow ? "" : '<text x="' + (L - 4) + '" y="' + (VT + 3.5) + '" text-anchor="end">' + fmt(volMax, 0) + "</text>" +
           '<text x="' + (L - 4) + '" y="' + (VB) + '" text-anchor="end">0</text>') +
       '<text class="ax-title" x="4" y="' + (VT - 12) + '">↑ 거래대금 (USDT)</text>';
     Object.keys(vol).forEach(function (h) {
@@ -552,17 +553,14 @@ function renderMarketChart() {
       if (hl > 0) svg += '<rect x="' + x.toFixed(1) + '" y="' + (VB - hu - hl).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hl.toFixed(1) + '" fill="var(--c-lbank)"/>';
     });
   }
-  for (var k = Math.ceil((lo - ref) / step); ref + k * step <= hi; k++) {
+  for (var k = Math.ceil((lo - ref) / step); !narrow && ref + k * step <= hi; k++) {
     var v = Math.exp(ref + k * step), y = Y(v), yv = y.toFixed(1);
-    var yIn = (y - T < 12 ? y + 11 : y - 3).toFixed(1);
     svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + yv + '" y2="' + yv + '"/>' +
-      (narrow ? '<text class="in" x="' + (L + 2) + '" y="' + yIn + '">'
-        : '<text x="' + (L - 4) + '" y="' + (y + 3.5).toFixed(1) + '" text-anchor="end">') + v.toFixed(1) + "</text>";
-    if (hasBtc) svg += (narrow ? '<text class="btc in" x="' + (W - R - 2) + '" y="' + yIn + '" text-anchor="end">'
-      : '<text class="btc" x="' + (W - R + 4) + '" y="' + (y + 3.5).toFixed(1) + '">') + fmt(v * Math.exp(-off), 0) + "</text>";
+      '<text x="' + (L - 4) + '" y="' + (y + 3.5).toFixed(1) + '" text-anchor="end">' + v.toFixed(1) + "</text>";
+    if (hasBtc) svg += '<text class="btc" x="' + (W - R + 4) + '" y="' + (y + 3.5).toFixed(1) + '">' + fmt(v * Math.exp(-off), 0) + "</text>";
   }
   if (hasBtc) svg += '<text class="ax-title btc" x="' + (W - 4) + '" y="' + (T - 12) + '" text-anchor="end">BTC ↑</text>';
-  svg += '<text class="ax-title" x="4" y="' + (T - 12) + '">↑ 가격 (USDT · 눈금 간격 ' + stepPct + '%)</text>' +
+  svg += '<text class="ax-title" x="4" y="' + (T - 12) + '">↑ 가격 (USDT' + (narrow ? "" : " · 눈금 간격 " + stepPct + "%") + ")</text>" +
     '<text class="ax-title" x="' + (W - R) + '" y="' + (PB + 16) + '" text-anchor="end">1시간 종가 · 맨 오른쪽은 현재가</text>';
   if (volMax > 0) svg += '<text class="ax-title" x="' + (W - R) + '" y="' + (H - 18) + '" text-anchor="end">1시간 거래대금 · ' + volCompare()[0] + '</text>' +
     '<text class="ax-title" x="' + (W - R) + '" y="' + (H - 4) + '" text-anchor="end">' + volCompare()[1] + "</text>";
@@ -582,9 +580,14 @@ function renderMarketChart() {
     btc.map(function (p) { return X(p[0]).toFixed(1) + "," + YB(p[1]).toFixed(1); }).join(" ") + '"/>';
   svg += line(lb, "var(--c-lbank)") + line(uni, "var(--c-uni)");
   svg += '<line id="mc-cross" x1="0" x2="0" y1="' + T + '" y2="' + VB + '" stroke="var(--faint)" stroke-dasharray="3 3" visibility="hidden"/>' +
+    (narrow ? '<line id="mc-hl-l" class="mc-hl" x1="' + L + '" x2="' + (W - R) + '" stroke="var(--c-lbank)" visibility="hidden"/>' +
+      '<line id="mc-hl-u" class="mc-hl" x1="' + L + '" x2="' + (W - R) + '" stroke="var(--c-uni)" visibility="hidden"/>' +
+      '<line class="mc-track" x1="' + L + '" x2="' + (W - R) + '" y1="' + TK + '" y2="' + TK + '"/>' +
+      '<g class="mc-knob"><rect id="mc-knob-r" y="' + (TK - 11) + '" height="22" rx="11"/><text id="mc-knob-t" y="' + (TK + 4) + '" text-anchor="middle"></text></g>' : "") +
     '<circle id="mc-dot-b" r="3" fill="var(--c-btc)" visibility="hidden"/><circle id="mc-dot-l" r="3.5" fill="var(--c-lbank)" visibility="hidden"/>' +
     '<circle id="mc-dot-u" r="3.5" fill="var(--c-uni)" visibility="hidden"/>' +
-    '<rect id="mc-hit" x="' + L + '" y="0" width="' + (W - L - R) + '" height="' + H + '" fill="transparent"/></svg>';
+    (narrow ? '<rect id="mc-hit" x="0" y="' + (TK - 22) + '" width="' + W + '" height="44" fill="transparent"/></svg>'
+      : '<rect id="mc-hit" x="' + L + '" y="0" width="' + (W - L - R) + '" height="' + H + '" fill="transparent"/></svg>');
   // The current-price line above the chart (#market-now) serves as the legend.
   box.innerHTML = '<div class="tip" id="mc-tip"></div>' + svg + '<figcaption>' + (lb.length ? "" : "LBank 봉을 받지 못함 · ") +
     // Values filled from on-chain history come from the same trades, so no notice; warn only when both files are stale.
@@ -615,6 +618,14 @@ function renderMarketChart() {
       if (!p || (i === 2 && btc.length < 2)) { d.setAttribute("visibility", "hidden"); return; }
       d.setAttribute("cx", X(t).toFixed(1)); d.setAttribute("cy", dots[i].y(p[1]).toFixed(1)); d.setAttribute("visibility", "visible");
     });
+    if (narrow) {
+      knob(X(t), isNow ? "지금" : (dt.getUTCMonth() + 1) + "/" + dt.getUTCDate() + " " + String(dt.getUTCHours()).padStart(2, "0") + "시");
+      [["mc-hl-u", u], ["mc-hl-l", l]].forEach(function (h) {
+        var el = $(h[0]);
+        if (!h[1]) { el.setAttribute("visibility", "hidden"); return; }
+        el.setAttribute("y1", Y(h[1][1]).toFixed(1)); el.setAttribute("y2", Y(h[1][1]).toFixed(1)); el.setAttribute("visibility", "visible");
+      });
+    }
     var v = vol[Math.floor(t / 3600000)];
     tip.innerHTML = [isNow ? "지금 " + String(dt.getUTCHours()).padStart(2, "0") + ":" + String(dt.getUTCMinutes()).padStart(2, "0") +
         " <small>(" + String(dt.getUTCHours()).padStart(2, "0") + "시 봉 진행 중)</small>"
@@ -626,13 +637,32 @@ function renderMarketChart() {
       .filter(Boolean).map(function (x) { return "<span>" + x + "</span>"; }).join("");
     tip.style.visibility = "visible";
   }
+  function knob(x, label) {
+    var r = $("mc-knob-r"), txt = $("mc-knob-t");
+    txt.textContent = label;
+    var w = txt.getComputedTextLength() + 18, kx = Math.min(Math.max(x, L + w / 2), W - R - w / 2);
+    txt.setAttribute("x", kx.toFixed(1)); r.setAttribute("x", (kx - w / 2).toFixed(1)); r.setAttribute("width", w.toFixed(1));
+  }
   function clear() {
     chartHover = false;
     cross.setAttribute("visibility", "hidden");
     dots.forEach(function (d) { d.el.setAttribute("visibility", "hidden"); });
     tip.style.visibility = "hidden";
+    if (narrow) {
+      $("mc-hl-u").setAttribute("visibility", "hidden"); $("mc-hl-l").setAttribute("visibility", "hidden");
+      knob(W - R, "지금");
+    }
   }
   marketChartTipClose = clear;
+  if (narrow) {
+    // Values show only while the finger is down; releasing returns the knob to "now".
+    knob(W - R, "지금");
+    hit.addEventListener("pointerdown", function (e) { hit.setPointerCapture(e.pointerId); move(e); });
+    hit.addEventListener("pointermove", function (e) { if (hit.hasPointerCapture(e.pointerId)) move(e); });
+    hit.addEventListener("pointerup", clear);
+    hit.addEventListener("pointercancel", clear);
+    return;
+  }
   hit.addEventListener("pointermove", move);
   hit.addEventListener("pointerdown", move);
   hit.addEventListener("pointerleave", function (e) { if (e.pointerType === "mouse") clear(); });

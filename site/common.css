@@ -288,8 +288,10 @@
     display: flex; flex-wrap: wrap; align-content: center; column-gap: 10px; row-gap: 1px; padding: 4px 8px;
     border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--ink); font-size: 12px; line-height: 1.45; box-sizing: border-box; }
   .market-chart .tip span { white-space: nowrap; }
-  /* Axis numbers drawn inside the plot get a halo so lines under them don't hurt legibility. */
-  .market-chart svg text.in { paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+  .market-chart .mc-track { stroke: var(--line); stroke-width: 4; stroke-linecap: round; }
+  .market-chart .mc-knob rect { fill: var(--surface); stroke: var(--muted); stroke-width: 1; }
+  .market-chart svg .mc-knob text { fill: var(--ink); font-family: inherit; font-size: 11px; }
+  .market-chart .mc-hl { stroke-width: 1; stroke-dasharray: 2 3; opacity: .7; }
   @media (max-width: 520px) {
     .summary .market-chart { margin-inline: -18px; }
     .summary .market-chart > figcaption, .summary .market-chart > details { padding-inline: 18px; }
