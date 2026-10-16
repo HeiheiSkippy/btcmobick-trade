@@ -277,7 +277,6 @@
   .market-now i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: 4px; }
   .market-now i.uni { background: var(--c-uni); }
   .market-now i.lbank { background: var(--c-lbank); }
-  /* Drawn as a border, not a background: mobile forced-dark modes darken background colors to near black. */
   .market-now i.btc { height: 0; border-top: 3px dashed var(--c-btc); border-radius: 0; }
   .market-chart svg text.btc { fill: var(--c-btc); }
   .market-now b { font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
