@@ -763,15 +763,16 @@ function renderMovn() {
 function renderMarketNow() {
   var uni = has(D.wbmbInMovn) && has(D.movnUsdt) ? D.wbmbInMovn * D.movnUsdt : null, lb = has(D.lbank) ? D.lbank : null;
   var krw = has(D.usdtKrw) ? D.usdtKrw : null;
-  // basis: where the value comes from. Uniswap is computed from two pool prices and can differ from the Uniswap app's price.
-  function item(cls, name, v, basis, missing) {
+  function won(v) { return krw ? "<small>(₩" + fmt(v * krw, 0) + ")</small>" : ""; }
+  function item(cls, name, v, missing) {
     return '<span class="now-item"><i class="' + cls + '"></i>' + name + " " +
-      (has(v) ? "<b>" + v.toFixed(2) + "</b> USDT<small>(" + basis + (krw ? " · ₩" + fmt(v * krw, 0) : "") + ")</small>" : '<small>' + missing + "</small>") + "</span>";
+      (has(v) ? "<b>" + v.toFixed(2) + "</b> USDT" + won(v) : '<small>' + missing + "</small>") + "</span>";
   }
-  $("market-now").innerHTML = item("uni", "유니스왑", uni, "풀 가격 기준 계산값", "받는 중") +
-    item("lbank", "LBank", lb, "마지막 체결가", LBK.state === "live" ? "체결 기다리는 중" : LBK.state === "failed" ? "연결 안 됨" : "연결 중") +
-    (has(BTC_NOW) ? '<span class="now-item"><i class="btc"></i>BTC <b>' + fmt(BTC_NOW, 0) +
-      "</b> USDT<small>(바이낸스" + (krw ? " · ₩" + fmt(BTC_NOW * krw, 0) : "") + ")</small></span>" : "");
+  $("market-now").innerHTML = item("uni", "유니스왑", uni, "받는 중") +
+    item("lbank", "LBank", lb, LBK.state === "live" ? "체결 기다리는 중" : LBK.state === "failed" ? "연결 안 됨" : "연결 중") +
+    (has(BTC_NOW) ? '<span class="now-item"><i class="btc"></i>BTC <b>' + fmt(BTC_NOW, 0) + "</b> USDT" + won(BTC_NOW) + "</span>" : "");
+  var at = new Date(Date.now() + 9 * 3600000);
+  $("market-at").textContent = [at.getUTCHours(), at.getUTCMinutes(), at.getUTCSeconds()].map(function (n) { return String(n).padStart(2, "0"); }).join(":");
   // Redraw the chart so its rightmost point matches this line; updates arriving together are merged into one redraw.
   clearTimeout(renderMarketChart.t);
   renderMarketChart.t = setTimeout(renderMarketChart, 300);
