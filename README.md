@@ -2,7 +2,7 @@
 
 BTCMobick(BMB)을 사고팔거나 옮길 때 어느 경로가 가장 유리한지 비교하는 페이지입니다.
 
-https://skippy0813g.github.io/btcmobick-trade/
+https://heiheiskippy.github.io/btcmobick-trade/
 
 - **BMB 시장가:** 유니스왑과 LBank의 최근 7일 BMB 가격(1시간 봉)과 시간별 거래대금을 BTC 가격과 함께 그래프로 보여 줍니다.
 - **거래 비교:** 빗썸·바이낸스·LBank 호가와 출금비, 유니스왑(BSC) 견적으로 가능한 매매·송금·전환 경로를 계산해 유리한 순으로 보여 줍니다.
