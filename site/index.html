@@ -21,7 +21,7 @@
   <header class="masthead">
     <h1><span class="brand">BTCMobick</span> 거래 비교</h1>
     <div class="unofficial">
-      <span>개인적으로 사용하기 위해 공개된 자료를 이용해 만들었습니다.<br><b>값이 늦거나 정확하지 않을 수 있으니 단순 참고용으로만 활용해 주세요.</b></span>
+      <span>개인적으로 사용하기 위해 공개된 자료를 이용해 만들었습니다.<br><b>값이 늦거나 정확하지 않을 수 있으니 단순 참고용으로만 활용해 주세요.</b><br>종이지갑 에어갭을 구현해봤습니다. 자세한 사항은 <a href="#paperwallet-helper">맨 아래쪽</a>을 참고해 주세요.</span>
     </div>
     <div class="rates-line summary-rates" aria-label="환산 기준">
       <span class="rate-chip"><span class="num">1 USDT = ₩<span id="head-usdt">—</span></span><span class="rate-src"><a href="https://www.bithumb.com/react/trade/order/USDT-KRW" target="_blank" rel="noopener" title="빗썸 USDT/원 거래 화면">빗썸</a> · <span id="stamp-bithumb">—</span></span></span>
@@ -157,7 +157,9 @@
       유니스왑 1시간 봉·거래대금: On-chain data powered by <a href="https://www.geckoterminal.com/" target="_blank" rel="noopener">GeckoTerminal</a>(주기 수집)<br>
       GeckoTerminal에서 받지 못한 시간: BSC 스왑 기록 <code>bsc-rpc.publicnode.com</code>(주기 수집)<br>
     </details>
-    <section class="pad app-promo" aria-label="PaperWallet Helper 안내">
+    <strong style="color:var(--muted)">문의사항</strong><br>
+    <a href="mailto:heiheiskippy@gmail.com">heiheiskippy@gmail.com</a>
+    <section class="pad app-promo" id="paperwallet-helper" aria-label="PaperWallet Helper 안내">
       <div class="app-promo-text">
         <h3 class="app-promo-title">PaperWallet Helper(종이지갑 에어갭) <span class="tag">1.0.0</span></h3>
         <p>비트모빅의 상징과도 같은 종이지갑을 위한 에어갭을 구현해봤습니다. 소스가 공개되어 있어 누구나 코드를 확인할 수 있으며 배포본 검증도 가능합니다. 앱은 무료입니다. 진정한 셀프 커스터디 종이지갑 에어갭에 도전해 보세요.</p>
@@ -165,9 +167,6 @@
         <p>사용 전에 <a href="https://github.com/HeiheiSkippy/PaperWalletHelper/blob/main/README.ko.md" target="_blank" rel="noopener">README</a>와 <a href="https://github.com/HeiheiSkippy/PaperWalletHelper/blob/main/USAGE.ko.md" target="_blank" rel="noopener">사용 방법</a>을 꼼꼼히 읽어 주세요. 사용자는 반드시 위 주소에서 APK를 "직접" 받아 설치해야 합니다. 다른 경로로는 배포되지 않으며, <strong class="app-promo-warn">타인에게 파일을 전달하지도 마세요</strong>(소스는 공개이지만 오픈소스는 아닙니다). <strong class="app-promo-warn">타인을 통해 전달받은 APK는 해커에 의해 오염됐을 수 있습니다.</strong></p>
       </div>
     </section>
-    <br>
-    <strong style="color:var(--muted)">문의사항</strong><br>
-    <a href="mailto:heiheiskippy@gmail.com">heiheiskippy@gmail.com</a>
   </footer>
 </div>
 
