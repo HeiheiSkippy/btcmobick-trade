@@ -69,6 +69,7 @@
     border-left: 3px solid var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent);
   }
   .unofficial b { color: var(--warn); }
+  .unofficial .unofficial-more { display: block; margin-top: 8px; }
   section { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; }
   .pad { padding: 18px 18px; }
   h2 {
