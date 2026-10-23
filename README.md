@@ -33,4 +33,4 @@ npm test
 
 ## 문의
 
-Skippy0813g@gmail.com
+heiheiskippy@gmail.com
