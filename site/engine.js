@@ -392,4 +392,24 @@ function uniPoolText(parts) {
   if (list.length === 1) return route(list[0]) + " 풀";
   return list.map((p) => route(p) + " " + p.percent + "%").join(" · ");
 }
+// Swap fee as a fraction: LP fee plus the protocol fee taken on top (both in millionths).
+function uniSwapFee(lpFee, protoFee) { return (protoFee + lpFee - protoFee * lpFee / 1e6) / 1e6; }
+// Reference MOVN/USDT pool for the header price: the pool that pays the most USDT per MOVN for a small sell, fees included.
+// Pools are ranked by the average fill of MOVN_REF_SELL at their active liquidity, which screens out dust pools
+// whose spot price is good but cannot be filled, and large pools nobody trades in because of their fee.
+// cands: [{ pool, sqrt (square root of USDT per MOVN), L (active liquidity), lpFee, protoFee }]
+// protoFee is the slot0 word: the MOVN-sell side in the low 12 bits, the MOVN-buy side in the next 12.
+// Returns { pool, price (pool price), sell, buy (marginal prices after fees) } or null.
+const MOVN_REF_SELL = 100;
+function movnPoolPick(cands) {
+  let best = null;
+  cands.forEach((c) => {
+    if (!(c.sqrt > 0) || !(c.L > 0)) return;
+    const sellFee = uniSwapFee(c.lpFee, c.protoFee & 0xfff), buyFee = uniSwapFee(c.lpFee, c.protoFee >> 12);
+    const price = c.sqrt * c.sqrt, dIn = MOVN_REF_SELL * 1e18 * (1 - sellFee);
+    const avg = c.L * (c.sqrt - c.sqrt / (1 + dIn * c.sqrt / c.L)) / (MOVN_REF_SELL * 1e18);
+    if (!best || avg > best.avg) best = { pool: c.pool, avg: avg, price: price, sell: price * (1 - sellFee), buy: price / (1 - buyFee) };
+  });
+  return best;
+}
 // route-engine-end

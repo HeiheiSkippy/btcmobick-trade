@@ -6,8 +6,8 @@ import { runInNewContext } from 'node:vm';
 const html = readFileSync(new URL('../site/engine.js', import.meta.url), 'utf8');
 const source = html.split('// route-engine-start')[1]?.split('// route-engine-end')[0];
 assert(source, '화면에 경로 계산 기능이 있어야 합니다');
-const { enumerateRoutes, buyFromBook, sellToBook, parseBithumbFees, parseBithumbStatus, uniPoolText, filterRouteExchanges, routeAssetsFor, routeUnit, routeDigits, routeStartNodes, routeGroupSteps, routeGroupLabel, uniBestSplit, uniEncodeAggregate3, uniDecodeAggregate3, uniReadWord, uniCall, uniNormalizeList, uniRouteHops, UNI_PERCENTS, bookRange } = runInNewContext(
-  `${source}\n({ enumerateRoutes, buyFromBook, sellToBook, parseBithumbFees, parseBithumbStatus, uniPoolText, filterRouteExchanges, routeAssetsFor, routeUnit, routeDigits, routeStartNodes, routeGroupSteps, routeGroupLabel, uniBestSplit, uniEncodeAggregate3, uniDecodeAggregate3, uniReadWord, uniCall, uniNormalizeList, uniRouteHops, UNI_PERCENTS, bookRange })`
+const { enumerateRoutes, buyFromBook, sellToBook, parseBithumbFees, parseBithumbStatus, uniPoolText, filterRouteExchanges, routeAssetsFor, routeUnit, routeDigits, routeStartNodes, routeGroupSteps, routeGroupLabel, uniBestSplit, uniEncodeAggregate3, uniDecodeAggregate3, uniReadWord, uniCall, uniNormalizeList, uniRouteHops, UNI_PERCENTS, bookRange, movnPoolPick, uniSwapFee } = runInNewContext(
+  `${source}\n({ enumerateRoutes, buyFromBook, sellToBook, parseBithumbFees, parseBithumbStatus, uniPoolText, filterRouteExchanges, routeAssetsFor, routeUnit, routeDigits, routeStartNodes, routeGroupSteps, routeGroupLabel, uniBestSplit, uniEncodeAggregate3, uniDecodeAggregate3, uniReadWord, uniCall, uniNormalizeList, uniRouteHops, UNI_PERCENTS, bookRange, movnPoolPick, uniSwapFee })`
 );
 
 test('목적지까지의 직행·우회·왕복 경로를 나열하고 무한 순환은 막는다', () => {
@@ -293,4 +293,24 @@ test('유니스왑 수수료 줄은 거친 풀을 정확히 적는다', () => {
   assert.equal(uniPoolText([{ percent: 100, hops: [{ pool: p05 }, { pool: wm }] }]), 'MOVN/USDT 0.05% → WBMB/MOVN 0.1% 풀');
   assert.equal(uniPoolText([{ percent: 10, hops: [{ pool: p045 }] }, { percent: 90, hops: [{ pool: p05 }] }]),
     'MOVN/USDT 0.05% 90% · MOVN/USDT 0.045% 10%');
+});
+
+test('MOVN 기준 풀은 유동성이 가장 큰 풀이 아니라 소액 매도 시 가장 많이 받는 풀이다', () => {
+  const pool = (name, price, L, lpFee, proto) => ({ pool: { name }, sqrt: Math.sqrt(price), L, lpFee, protoFee: proto | (proto << 12) });
+  const picked = movnPoolPick([
+    pool('0.05%', 0.97212, 1.07e23, 500, 125),
+    pool('2.9%', 0.98056, 1.84e25, 29000, 1000),
+    pool('0.01%', 0.97201, 1.22e22, 100, 25),
+    pool('0.045%', 0.9835, 0, 450, 115),
+  ]);
+  assert.equal(picked.pool.name, '0.05%');
+  assert(Math.abs(picked.price - 0.97212) < 1e-9);
+  assert(Math.abs(picked.sell - 0.97212 * (1 - 0.000625)) < 1e-6);
+  assert(Math.abs(picked.buy - 0.97212 / (1 - 0.000625)) < 1e-6);
+});
+
+test('스왑 수수료는 풀 수수료에 프로토콜 몫을 더한 값이다', () => {
+  assert(Math.abs(uniSwapFee(29000, 1000) - 0.029971) < 1e-12);
+  assert(Math.abs(uniSwapFee(500, 125) - 0.0006249375) < 1e-12);
+  assert.equal(movnPoolPick([]), null);
 });
