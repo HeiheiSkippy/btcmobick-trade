@@ -780,6 +780,19 @@ async function runRouteSimulator(auto) {
       return byIds[key] != null && byIds[key] >= r.out * (1 - 1e-12);
     });
   });
+  // Selling BMB from "any" place also starts from wallet WBMB. A WBMB path that only skips the free BMB → WBMB wrap
+  // duplicates the wrap path, so keep the one that starts from the BMB the user chose.
+  if (query.from[1] === "bmb") {
+    var keyOf = function (r) { return r.path.map(function (e) { return e.id; }).join(">"); };
+    var byKey = {};
+    succeeded.forEach(function (r) { byKey[keyOf(r)] = r; });
+    succeeded = succeeded.filter(function (r) {
+      var twin = r.path[0].from === "wallet-wbmb" && byKey["wrap-bmb>" + keyOf(r)];
+      if (!twin) return true;
+      var a = inverse ? twin.cost : twin.out, b = inverse ? r.cost : r.out;
+      return Math.abs(a - b) > Math.abs(b) * 1e-12;
+    });
+  }
   // On equal output, fewer steps first.
   function byOut(a, b) {
     return inverse ? (a.cost - b.cost) || (a.path.length - b.path.length) : (b.out - a.out) || (a.path.length - b.path.length);
@@ -823,14 +836,15 @@ async function runRouteSimulator(auto) {
     var num = routeShortQty;
     var endOf = function (r) { return r.path[r.path.length - 1].to; };
     // Every card shows in -> out. The top card adds where it starts and ends; the others show how much worse they are
-    // than the top path (more spent when solving backwards, less received otherwise).
-    var gapNode = inverse ? top.path[0].from : endOf(top);
+    // than the top path (more spent when solving backwards, less received otherwise), in the card's own unit
+    // (BMB and WBMB are 1:1, so a WBMB top path and a BMB card compare directly).
     var card = function (r, best) {
       var inNode = r.path[0].from, outNode = endOf(r), input = inverse ? r.cost : amount;
       var main = num(input, inNode) + " " + routeUnit(inNode) + " → " + num(r.out, outNode) + " " + routeUnit(outNode);
       if (best) return routeCard(r, { best: true, main: main,
         meta: "소요 → 수령 · " + routeEscape(routeNodeName(inNode)) + " 출발 · " + routeEscape(routeNodeName(outNode)) + " 수령" +
           (inverse ? "" : " " + routeChangeHtml(inNode, outNode, r.out)) });
+      var gapNode = inverse ? inNode : outNode;
       var shown = num(inverse ? r.cost - top.cost : top.out - r.out, gapNode);
       var gap = Number(shown.replace(/,/g, "")) === 0 ? "최적 경로와 같음"
         : "최적 경로보다 " + shown + " " + routeUnit(gapNode) + (inverse ? " 더 듦" : " 적게 수령");
