@@ -46,7 +46,9 @@ function fillRoutePlaces() {
 // Values not available from public APIs are entered by the user and stored in this browser only.
 // No inputs are laid out up front: settings show values as text, and results ask only for what is missing.
 var ROUTE_INPUTS = [
-  { id: "route-trade-bithumb", group: "trade", label: "빗썸 거래 수수료", unit: "%", def: "0.04", max: 5 },
+  // Bithumb's 0.04% applies only after opting in (renewed every 30 days); otherwise 0.25%. The note says so under the row.
+  { id: "route-trade-bithumb", group: "trade", label: "빗썸 거래 수수료", unit: "%", def: "0.04", max: 5,
+    note: "0.04%는 빗썸 '국내 최저 수수료' 신청 시 적용됩니다(30일마다 다시 신청). 신청하지 않으면 0.25%입니다. 신청: 빗썸 → 혜택 → 국내 최저 수수료 신청" },
   { id: "route-trade-binance", group: "trade", label: "바이낸스 거래 수수료", unit: "%", def: "0.1", max: 5 },
   { id: "route-trade-lbank", group: "trade", label: "LBank 거래 수수료", unit: "%", def: "0.1", max: 5 },
   // Withdraw fees below come from public endpoints; the inputs are used only when the lookup fails.
@@ -131,6 +133,7 @@ function routeSettingRow(d, editing) {
     : '<span class="tag">입력 안 함</span>';
   html += ' <button type="button" class="route-link-button" data-route-change="' + d.id + '">' + (value !== "" ? "수정" : "입력") + '</button>';
   if (saved) html += ' <button type="button" class="route-link-button" data-route-clear="' + d.id + '">' + (d.def ? "기본값으로" : "지우기") + '</button>';
+  if (d.note) html += '<p class="route-setting-hint">' + routeEscape(d.note) + '</p>';
   return html + '</div>';
 }
 var routeEditing = null;
