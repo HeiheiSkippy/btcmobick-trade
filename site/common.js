@@ -507,7 +507,8 @@ function renderMarketChart() {
   // Price on top (T..PB), volume bars below (VT..VB), dates at the bottom.
   // Narrow screens have no axis numbers; a scrub track at TK between the two charts picks the hour so the finger covers neither.
   var W = Math.max(260, Math.round(box.clientWidth || 320)), narrow = W < 480;
-  var L = narrow ? 8 : 44, R = narrow ? 8 : btc.length > 1 ? 50 : 8, T = 28, PB = 150, TK = 186;
+  // BMB price numbers sit on the right axis, BTC on the left. The left margin also holds the volume axis numbers.
+  var L = narrow ? 8 : btc.length > 1 ? 50 : 44, R = narrow ? 8 : 44, T = 28, PB = 150, TK = 186;
   var VT = narrow ? 236 : 206, VB = VT + 46, H = VB + 46;
   // Log scale shared by both axes, so equal heights mean equal % moves. BTC is shifted to start at the BMB line's height.
   var hasBtc = btc.length > 1, ref = Math.log((uni[0] || lb[0])[1]), off = hasBtc ? ref - Math.log(btc[0][1]) : 0;
@@ -559,11 +560,11 @@ function renderMarketChart() {
   for (var k = Math.ceil((lo - ref) / step); !narrow && ref + k * step <= hi; k++) {
     var v = Math.exp(ref + k * step), y = Y(v), yv = y.toFixed(1);
     svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + yv + '" y2="' + yv + '"/>' +
-      '<text x="' + (L - 4) + '" y="' + (y + 3.5).toFixed(1) + '" text-anchor="end">' + v.toFixed(1) + "</text>";
-    if (hasBtc) svg += '<text class="btc" x="' + (W - R + 4) + '" y="' + (y + 3.5).toFixed(1) + '">' + fmt(v * Math.exp(-off), 0) + "</text>";
+      '<text x="' + (W - R + 4) + '" y="' + (y + 3.5).toFixed(1) + '">' + v.toFixed(1) + "</text>";
+    if (hasBtc) svg += '<text class="btc" x="' + (L - 4) + '" y="' + (y + 3.5).toFixed(1) + '" text-anchor="end">' + fmt(v * Math.exp(-off), 0) + "</text>";
   }
-  if (hasBtc) svg += '<text class="ax-title btc" x="' + (W - 4) + '" y="' + (T - 12) + '" text-anchor="end">BTC ↑</text>';
-  svg += '<text class="ax-title" x="4" y="' + (T - 12) + '">↑ 가격 (USDT' + (narrow ? "" : " · 눈금 간격 " + stepPct + "%") + ")</text>" +
+  if (hasBtc) svg += '<text class="ax-title btc" x="4" y="' + (T - 12) + '">↑ BTC</text>';
+  svg += '<text class="ax-title" x="' + (W - 4) + '" y="' + (T - 12) + '" text-anchor="end">BMB 가격 (USDT' + (narrow ? "" : " · 눈금 간격 " + stepPct + "%") + ") ↑</text>" +
     '<text class="ax-title" x="' + (W - R) + '" y="' + (PB + 16) + '" text-anchor="end">1시간 종가 · 맨 오른쪽은 현재가</text>';
   if (volMax > 0) svg += '<text class="ax-title" x="' + (W - R) + '" y="' + (H - 18) + '" text-anchor="end">1시간 거래대금 · ' + volCompare()[0] + '</text>' +
     '<text class="ax-title" x="' + (W - R) + '" y="' + (H - 4) + '" text-anchor="end">' + volCompare()[1] + "</text>";
