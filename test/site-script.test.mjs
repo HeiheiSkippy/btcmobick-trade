@@ -18,6 +18,6 @@ test('화면 스크립트에 같은 이름의 맨 위 함수를 두 번 정의�
 });
 
 test('페이지가 필요한 스크립트를 순서대로 읽는다', () => {
-  const src = (html) => [...readFileSync(new URL('../site/' + html, import.meta.url), 'utf8').matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+  const src = (html) => [...readFileSync(new URL('../site/' + html, import.meta.url), 'utf8').matchAll(/<script src="([^"?]+)(?:\?v=[0-9a-f]+)?"/g)].map((m) => m[1]);
   assert.deepEqual(src('index.html'), ['engine.js', 'common.js', 'trade.js']);
 });
