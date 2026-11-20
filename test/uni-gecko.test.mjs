@@ -25,13 +25,13 @@ test('24시간 거래량: 풀 주소로 키를 찾는다', () => {
   assert.deepEqual(parseVolumes(j), { mu05: 123.5 });
 });
 
-test('MOVN 1시간 거래량: MOVN/USDT 풀만 주소별로 남긴다', () => {
+test('MOVN 1시간 거래량: MOVN/USDT·WBMB/MOVN 풀만 주소별로 남긴다', () => {
   const p = (address, base, quote, h1) => ({ attributes: { address, volume_usd: { h1 } },
     relationships: { base_token: { data: { id: 'bsc_' + base } }, quote_token: { data: { id: 'bsc_' + quote } } } });
-  const MOVN = '0x200b63AA750c901892d4DCf82439860F9C270274', USDT = '0x55d398326f99059ff775485246999027b3197955', WBMB = '0x' + '11'.repeat(20);
-  assert.deepEqual(parseMovnHour({ data: [p('0xAA', MOVN, USDT, '5375.4'), p('0xbb', USDT, MOVN, '0.0'), p('0xcc', MOVN, WBMB, '99')] }),
-    { '0xaa': 5375.4, '0xbb': 0 });
-  assert.throws(() => parseMovnHour({ data: [p('0xcc', MOVN, WBMB, '99')] }), /h1/);
+  const MOVN = '0x200b63AA750c901892d4DCf82439860F9C270274', USDT = '0x55d398326f99059ff775485246999027b3197955', WBMB = '0x9E4c611B834672c3643D9818249366bf65ae4C86', OTHER = '0x' + '11'.repeat(20);
+  assert.deepEqual(parseMovnHour({ data: [p('0xAA', MOVN, USDT, '5375.4'), p('0xbb', USDT, MOVN, '0.0'), p('0xcc', MOVN, WBMB, '99'), p('0xdd', MOVN, OTHER, '7')] }),
+    { '0xaa': 5375.4, '0xbb': 0, '0xcc': 99 });
+  assert.throws(() => parseMovnHour({ data: [p('0xdd', MOVN, OTHER, '7')] }), /h1/);
 });
 
 test('받지 못한 부분은 이전 값을 두고, 429는 고장으로 치지 않는다', async () => {
@@ -46,7 +46,7 @@ test('받지 못한 부분은 이전 값을 두고, 429는 고장으로 치지 �
   assert.deepEqual(state.trades, []);
   assert.notEqual(state.tradesAt, 'old');
   assert.equal(state.volumeAt, 'old');
-  assert.equal(limited.length, 2);
+  assert.equal(limited.length, 4);
   assert.equal(state.movnHourAt, 'old');
   assert.equal(problems.length, 2);
 });

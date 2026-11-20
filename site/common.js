@@ -108,12 +108,8 @@ function movnUsdtPrice() {
     });
     var best = movnPoolPick(cands);
     if (!best) throw new Error("빈 풀");
-    var vol = g && g.movnHour && Date.now() - Date.parse(g.movnHourAt) < MOVN_HOUR_MAX_AGE_MS ? g.movnHour : null, top = null;
-    if (vol) cands.forEach(function (c) {
-      var v = vol[c.pool.id.toLowerCase()];
-      if (c.sqrt > 0 && v > 0 && (!top || v > top.v)) top = { pool: c.pool, price: c.sqrt * c.sqrt, v: v };
-    });
-    if (top) best = top;
+    var top = hourTopPool(cands, g);
+    if (top) best = { pool: top.pool, price: top.sqrt * top.sqrt };
     // When the reference pool changes, recompute the peg view with the new pool (only if it is on screen).
     if (best.pool.id !== MOVN_POOL.id && typeof PEG !== "undefined" && PEG.at) {
       PEG.at = 0;
@@ -121,6 +117,34 @@ function movnUsdtPrice() {
     }
     MOVN_POOL = best.pool;
     return best.price;
+  });
+}
+
+// Among read pools [{ pool, sqrt }], the one with the most volume in the last hour (data/uni-gecko.json movnHour);
+// null without fresh volume data or with no volume in the last hour.
+function hourTopPool(cands, g) {
+  var vol = g && g.movnHour && Date.now() - Date.parse(g.movnHourAt) < MOVN_HOUR_MAX_AGE_MS ? g.movnHour : null, top = null;
+  if (vol) cands.forEach(function (c) {
+    var v = vol[c.pool.id.toLowerCase()];
+    if (c.sqrt > 0 && v > 0 && (!top || v > top.v)) top = { pool: c.pool, sqrt: c.sqrt, v: v };
+  });
+  return top;
+}
+// WBMB/MOVN price (WBMB per MOVN, as poolPrice returns) from the hookless v4 pool with the most volume in the last hour,
+// else the 0.1% pool. MOVN is token0 (18 decimals) and WBMB token1 (8 decimals).
+var WBMB_POOL = null;
+function wbmbMovnPrice() {
+  var list = poolsBetween(MOVN, WBMB);
+  if (!list.length) return poolPrice(SLOT_WBMB_MOVN, 18, 8);
+  return Promise.all([
+    svBatch(list.map(function (p) { return SV_SLOT0 + p.id.slice(2); })),
+    loadUniGecko().catch(function () { return null; })
+  ]).then(function (res) {
+    var cands = list.map(function (p, i) { return { pool: p, sqrt: Number(BigInt(res[0][i].slice(0, 66))) / Math.pow(2, 96) }; });
+    var top = hourTopPool(cands, res[1]) || cands.filter(function (c) { return c.pool.id === MARKET_POOLS.wm10.id && c.sqrt > 0; })[0];
+    if (!top) return poolPrice(SLOT_WBMB_MOVN, 18, 8);
+    WBMB_POOL = top.pool;
+    return top.sqrt * top.sqrt * 1e10;
   });
 }
 
@@ -366,7 +390,7 @@ function load() {
   Promise.all([
     USDT_WS.state === "live" ? Promise.resolve({ ok: true, v: null, live: true })
       : settle(fetch(BITHUMB_TICKER).then(json).then(function (j) { return Number(j[0].trade_price); })),
-    settle(Promise.all([poolPrice(SLOT_WBMB_MOVN, 18, 8), movnUsdtPrice()])),
+    settle(Promise.all([wbmbMovnPrice(), movnUsdtPrice()])),
     settle(Promise.all([
       call(WBMB, "0x18160ddd"),
       call(MOVN, "0x18160ddd")
@@ -397,10 +421,12 @@ function load() {
 
 
 // ── Market price chart: last 7 days of BMB price in USDT, one line each for Uniswap and LBank ──
-// Uniswap = WBMB/MOVN 0.1% hourly close × the latest MOVN/USDT 0.05% hourly close at or before that hour (GeckoTerminal).
+// Uniswap = WBMB/MOVN hourly price × the latest MOVN/USDT hourly price at or before that hour (GeckoTerminal, else on-chain history).
+// Each hourly price is the volume-weighted average of the pools' closes (WBMB/MOVN 0.1%·2.9%, MOVN/USDT 0.05%·0.3%), so a change
+// in which pool trades most does not show up as a jump (the 2.9% pool can sit up to about 3% away from the others).
 // LBank = BMB/USDT hourly close. LBank REST blocks browser requests, so read data/lbank-kline.json saved by the collector.
 // The last point is the current pool price and LBank's last websocket trade.
-// Bars are hourly volume in USDT. Uniswap = WBMB/MOVN pool volume (in MOVN) × MOVN/USDT price at that hour;
+// Bars are hourly volume in USDT. Uniswap = volume of both WBMB/MOVN pools (in MOVN) × MOVN/USDT price at that hour;
 // LBank = BMB traded × that hour's close. Points are [time ms, price, volume].
 var CHART_DAYS = 7;
 var CHART = { uni: null, lbank: null, btc: null, at: 0, stale: false }, chartHover = false;
@@ -465,6 +491,23 @@ function uniVolumeDay7(key) {
   var sum = h.reduce(function (t, x) { return t + (x[2] > 0 ? x[2] : 0); }, 0);
   return sum * q / Math.min(7, (Date.now() - h[0][0]) / 86400000);
 }
+var CHART_WBMB_POOLS = ["wm10", "wm29"], CHART_MOVN_POOLS = ["mu05", "mu30"];
+// Several pools' hourly candles [time, close, volume] -> one series: per hour, closes averaged by volume (plain average if all
+// volumes are zero) and volumes summed. Volumes must be in the same asset.
+function weightedHours(lists) {
+  var by = {};
+  lists.forEach(function (list) {
+    list.forEach(function (h) {
+      var row = by[h[0]] || (by[h[0]] = { pv: 0, v: 0, p: 0, n: 0 }), v = h[2] > 0 ? h[2] : 0;
+      row.pv += h[1] * v; row.v += v; row.p += h[1]; row.n++;
+    });
+  });
+  return Object.keys(by).map(Number).sort(function (a, b) { return a - b; }).map(function (t) {
+    var r = by[t];
+    return [t, r.v > 0 ? r.pv / r.v : r.p / r.n, r.v];
+  });
+}
+function chartPairHours(hoursOf, keys) { return weightedHours(keys.map(hoursOf)); }
 // Uniswap WBMB price in USDT: WBMB/MOVN candle × the latest MOVN/USDT candle at or before it. Volume is converted the same way.
 function mergeUniHours(w, movn) {
   return w.map(function (x) {
@@ -489,14 +532,15 @@ function loadMarketChart() {
   ]).then(function (r) {
     // Base series is the saved GeckoTerminal candles, else the last GeckoTerminal candles remembered in this browser.
     // From the base's last (possibly incomplete) candle onward, on-chain history replaces and extends it when available.
-    var w = uniGeckoHours("wm10"), m = uniGeckoHours("mu05"), base = null, uni;
+    var w = chartPairHours(uniGeckoHours, CHART_WBMB_POOLS), m = chartPairHours(uniGeckoHours, CHART_MOVN_POOLS), base = null, uni;
     if (w.length && m.length) {
       base = mergeUniHours(w, m);
-      try { localStorage.setItem("chart-uni-v2", JSON.stringify(base)); } catch (e) {}
+      try { localStorage.setItem("chart-uni-v3", JSON.stringify(base)); } catch (e) {}
     } else {
-      try { base = JSON.parse(localStorage.getItem("chart-uni-v2") || "null"); } catch (e) {}
+      try { base = JSON.parse(localStorage.getItem("chart-uni-v3") || "null"); } catch (e) {}
     }
-    var cw = uniHistHours("wm10"), cm = uniHistHours("mu05"), chain = cw.length && cm.length ? mergeUniHours(cw, cm) : [];
+    var cw = chartPairHours(uniHistHours, CHART_WBMB_POOLS), cm = chartPairHours(uniHistHours, CHART_MOVN_POOLS);
+    var chain = cw.length && cm.length ? mergeUniHours(cw, cm) : [];
     if (base && base.length) {
       var cutoff = base[base.length - 1][0], tail = chain.filter(function (p) { return p[0] >= cutoff; });
       uni = tail.length ? base.filter(function (p) { return p[0] < cutoff; }).concat(tail) : base;
@@ -615,9 +659,11 @@ function renderMarketChart() {
     // Values filled from on-chain history come from the same trades, so no notice; warn only when both files are stale.
     (CHART.stale ? "유니스왑 최근 봉을 받지 못함 · " : "") +
     'On-chain data powered by <a href="https://www.geckoterminal.com/" target="_blank" rel="noopener">GeckoTerminal</a></figcaption>' +
-    helpHtml("market-chart", "참고", "<ul><li>유니스왑은 WBMB/MOVN 풀 가격 × MOVN/USDT 풀 가격, LBank는 BMB/USDT 체결가입니다.</li>" +
+    helpHtml("market-chart", "참고", "<ul><li>유니스왑은 WBMB/MOVN 가격 × MOVN/USDT 가격입니다. 시간별 가격은 풀별 종가를 거래량으로 가중 평균한 값" +
+      "(WBMB/MOVN 0.1%·2.9%, MOVN/USDT 0.05%·0.3%)이고, 현재가는 최근 1시간 거래량이 가장 많은 풀의 가격입니다.</li>" +
+      "<li>LBank는 BMB/USDT 체결가, BTC는 바이낸스 BTC/USDT 체결가입니다.</li>" +
       "<li>세로축은 로그 눈금이며, 양쪽 축의 눈금 간격은 같은 변동률입니다.</li>" +
-      "<li>거래대금(USDT 환산): 유니스왑은 MOVN 거래량 × MOVN 가격, LBank는 BMB 거래량 × 종가입니다. 막대는 두 곳을 쌓은 것입니다.</li></ul>");
+      "<li>거래대금(USDT 환산): 유니스왑은 WBMB/MOVN 두 풀의 MOVN 거래량 합 × MOVN 가격, LBank는 BMB 거래량 × 종가입니다. 막대는 두 곳을 쌓은 것입니다.</li></ul>");
   var hit = $("mc-hit"), cross = $("mc-cross"), tip = $("mc-tip"), svgEl = box.querySelector("svg");
   var dots = [["mc-dot-u", Y], ["mc-dot-l", Y], ["mc-dot-b", YB]].map(function (d) { return { el: $(d[0]), y: d[1] }; });
   function before(list, t) {
@@ -759,7 +805,7 @@ var LBANK_WS = "wss://api.lbank.info/ws/V2/";
 var POOL_POLL_MS = 10000;
 function pollPools() {
   if (!loaded) return;
-  Promise.all([poolPrice(SLOT_WBMB_MOVN, 18, 8), movnUsdtPrice()])
+  Promise.all([wbmbMovnPrice(), movnUsdtPrice()])
     .then(function (r) {
       D.wbmbInMovn = 1 / r[0];
       D.movnUsdt = r[1];
@@ -937,12 +983,13 @@ function svBatch(datas) {
 // Pools holding less than PEG_MIN_RESERVE_USD are left out: the Uniswap router skipped such a pool (0.27%, about $471)
 // even though its spot price was higher, so its price could not actually be traded at.
 var PEG_MIN_RESERVE_USD = 500;
-function pegPoolList() {
+function poolsBetween(t0, t1) {
   return Object.keys(UNI.pools).map(function (id) { return UNI.pools[id]; }).filter(function (p) {
-    return p.proto === "v4" && /^0x0+$/.test(p.hooks) && p.t0 === MOVN.toLowerCase() && p.t1 === USDT.toLowerCase() &&
+    return p.proto === "v4" && /^0x0+$/.test(p.hooks) && p.t0 === t0.toLowerCase() && p.t1 === t1.toLowerCase() &&
       !(p.reserveUsd < PEG_MIN_RESERVE_USD);
   });
 }
+function pegPoolList() { return poolsBetween(MOVN, USDT); }
 
 // Uniswap pools used by the market structure features. The 0.01% and 0.25% MOVN/USDT pools are nearly empty and left out.
 // invert: the display price (quote per base) is the inverse of the pool's raw price (token1/token0).

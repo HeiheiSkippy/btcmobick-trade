@@ -19,11 +19,14 @@ const RPC = 'https://bsc-rpc.publicnode.com';
 const POOL_MANAGER = '0x28e2ea090877bf75740558f6bfb36a5ffee9e9df';
 // Swap(bytes32 indexed id, address indexed sender, int128 amount0, int128 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick, uint24 fee)
 const SWAP_TOPIC = '0x40e9cecb9f5f1f1c5b9c97dec2917b7ee92e57ba5563708daca94dd84ad7112f';
-// Same pools as the page's MARKET_POOLS. baseIs0: whether the base asset is token0.
+// The page's MARKET_POOLS plus the pools the price chart averages (wm29, mu30). baseIs0: whether the base asset is token0.
+// quoteMovn: the quote asset is MOVN (volume and large trades are converted to USD with the MOVN/USDT price).
 export const POOLS = {
   mu05: { id: '0x5de52159724f0d421445f4a5eeccc047bb6cc7821a008b7a171d896256d3a217', dec0: 18, dec1: 18, baseIs0: true },
   mu29: { id: '0x68ed65f5029ed3b40fdb23baadb1ee3b2327eefdb5f08e5d31715a8d8e4ff7f6', dec0: 18, dec1: 18, baseIs0: true },
-  wm10: { id: '0x56e0a9b160ade73e83d236e31ef9cb3527905a820c8cb61aba6c949e9472cab6', dec0: 18, dec1: 8, baseIs0: false },
+  wm10: { id: '0x56e0a9b160ade73e83d236e31ef9cb3527905a820c8cb61aba6c949e9472cab6', dec0: 18, dec1: 8, baseIs0: false, quoteMovn: true },
+  wm29: { id: '0x9dc4c79fe67ea06877382a38594dd206d99d57379e9fbc614096e501a6296426', dec0: 18, dec1: 8, baseIs0: false, quoteMovn: true },
+  mu30: { id: '0x0d73479f9c86173e04c269a7a7d3c7fc0ce0a0f7a6b14c27a4e54504200d04f4', dec0: 18, dec1: 18, baseIs0: true },
 };
 const CHUNK = 2000;
 const MAX_BACK = 9000;
@@ -133,7 +136,7 @@ async function collect(prev, { trades: withTrades = true } = {}) {
     if (!(s.price > 0) || !Number.isFinite(s.t)) continue;
     byPool[key].push(s);
     if (key === 'mu05') movnUsdt = s.price;
-    const usd = key === 'wm10' ? (movnUsdt ? Math.abs(s.quote) * movnUsdt : null) : Math.abs(s.quote);
+    const usd = POOLS[key].quoteMovn ? (movnUsdt ? Math.abs(s.quote) * movnUsdt : null) : Math.abs(s.quote);
     if (withTrades && usd >= TRADE_MIN_USD) big.push({ t: s.t, pool: key, buy: s.buy, qty: Math.abs(s.base), usd, tx: log.transactionHash.toLowerCase() });
   }
   for (const k of Object.keys(POOLS)) state.pools[k].hours = addToHours(state.pools[k].hours, byPool[k]);

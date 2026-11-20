@@ -3,8 +3,8 @@
 //
 //   node src/uni-gecko.mjs site/data/uni-gecko.json [previous file URL]
 //
-// 7 requests: 2 hourly candle series (WBMB/MOVN 0.1%, MOVN/USDT 0.05%), 3 large-trade lists ($500+ per pool), 1 pool info (24h volume),
-// 1 MOVN token pool list (1h volume of every MOVN/USDT pool).
+// 9 requests: 4 hourly candle series (WBMB/MOVN 0.1%·2.9%, MOVN/USDT 0.05%·0.3%), 3 large-trade lists ($500+ per pool),
+// 1 pool info (24h volume), 1 MOVN token pool list (1h volume of every MOVN/USDT and WBMB/MOVN pool).
 // Each part keeps its own fetch time, and a failed part keeps the previous file's value. The Action starts from an empty folder,
 // so without a local file it fetches the previous file (the published copy).
 // Failures other than rate limiting (429), such as a changed response format, exit with code 1 so this doubles as a check.
@@ -12,21 +12,26 @@
 //
 // File format (same units as uni-history.json):
 //   { at,
-//     hoursAt, hours: { wm10: [[hour start unix seconds, close, volume (quote asset)], ...], mu05: [...] },
+//     hoursAt, hours: { wm10: [[hour start unix seconds, close, volume (quote asset)], ...], wm29, mu05, mu30 },
 //     tradesAt, trades: [{ t, pool, buy, qty (base asset), usd, wallet, tx }, …],
 //     volumeAt, volume: { mu05, mu29, wm10 (24h volume, USD) },
-//     movnHourAt, movnHour: { pool id: 1h volume (USD) } for MOVN/USDT pools }
+//     movnHourAt, movnHour: { pool id: 1h volume (USD) } for MOVN/USDT and WBMB/MOVN pools }
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { POOLS } from './uni-history.mjs';
 
-const HOUR_POOLS = ['wm10', 'mu05'];
+const HOUR_POOLS = ['wm10', 'wm29', 'mu05', 'mu30'];
+// GeckoTerminal lists the WBMB/MOVN 2.9% pool as MOVN/WBMB, so its candles are asked for the quote token (WBMB) to keep MOVN per WBMB.
+const HOUR_TOKEN = { wm29: 'quote' };
+// Large-trade lists only for the page's MARKET_POOLS (GeckoTerminal's buy/sell would be reversed for wm29).
+const TRADE_POOLS = ['mu05', 'mu29', 'wm10'];
 const HOURS = 7 * 24 + 2;
 export const TRADE_MIN_USD = 500;
 
 const GECKO = 'https://api.geckoterminal.com/api/v2/networks/bsc/';
 const MOVN = '0x200b63aa750c901892d4dcf82439860f9c270274', USDT = '0x55d398326f99059ff775485246999027b3197955';
+const WBMB = '0x9e4c611b834672c3643d9818249366bf65ae4c86';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // 1 second between requests (6 requests leave plenty of room under the per-minute limit). On 429, retry once after 20 seconds.
@@ -78,7 +83,7 @@ export function parseVolumes(j) {
   return out;
 }
 
-// MOVN token pool list response -> { pool id: 1h volume (USD) } for pools between MOVN and USDT.
+// MOVN token pool list response -> { pool id: 1h volume (USD) } for MOVN/USDT and WBMB/MOVN pools.
 // The page shows the price of the pool with the most volume in the last hour, which is what the Uniswap app was seen to show.
 export function parseMovnHour(j) {
   if (!j || !Array.isArray(j.data)) throw new Error('MOVN 풀 목록 형식이 다릅니다');
@@ -87,9 +92,9 @@ export function parseMovnHour(j) {
   for (const p of j.data) {
     const a = p.attributes || {}, pair = [tok(p, 'base_token'), tok(p, 'quote_token')].sort().join();
     const v = Number(a.volume_usd && a.volume_usd.h1), id = String(a.address || '').toLowerCase();
-    if (pair === [MOVN, USDT].sort().join() && /^0x[0-9a-f]+$/.test(id) && Number.isFinite(v)) out[id] = v;
+    if ((pair === [MOVN, USDT].sort().join() || pair === [MOVN, WBMB].sort().join()) && /^0x[0-9a-f]+$/.test(id) && Number.isFinite(v)) out[id] = v;
   }
-  if (!Object.keys(out).length) throw new Error('MOVN/USDT 풀의 volume_usd.h1이 없습니다');
+  if (!Object.keys(out).length) throw new Error('MOVN/USDT·WBMB/MOVN 풀의 volume_usd.h1이 없습니다');
   return out;
 }
 
@@ -119,13 +124,14 @@ export async function collect(prev, get = gecko, { trades: withTrades = true } =
   const hours = {};
   for (const key of HOUR_POOLS) {
     hours[key] = await part(`${key} 1시간 봉`, async () =>
-      parseHours(await get(`pools/${POOLS[key].id}/ohlcv/hour?aggregate=1&limit=${HOURS}&currency=token`)), problems, limited);
+      parseHours(await get(`pools/${POOLS[key].id}/ohlcv/hour?aggregate=1&limit=${HOURS}&currency=token` +
+        (HOUR_TOKEN[key] ? `&token=${HOUR_TOKEN[key]}` : ''))), problems, limited);
   }
   if (HOUR_POOLS.every((k) => hours[k])) { state.hours = hours; state.hoursAt = now; }
 
   const trades = [];
   let tradesOk = withTrades;
-  for (const key of withTrades ? Object.keys(POOLS) : []) {
+  for (const key of withTrades ? TRADE_POOLS : []) {
     const list = await part(`${key} 큰 거래`, async () =>
       parseTrades(await get(`pools/${POOLS[key].id}/trades?trade_volume_in_usd_greater_than=${TRADE_MIN_USD}`), key), problems, limited);
     if (list) trades.push(...list); else tradesOk = false;
@@ -137,7 +143,7 @@ export async function collect(prev, get = gecko, { trades: withTrades = true } =
     parseVolumes(await get('pools/multi/' + Object.values(POOLS).map((p) => p.id).join(','))), problems, limited);
   if (volume) { state.volume = volume; state.volumeAt = now; }
 
-  const movnHour = await part('MOVN/USDT 1시간 거래량', async () => parseMovnHour(await get(`tokens/${MOVN}/pools?page=1`)), problems, limited);
+  const movnHour = await part('MOVN 풀 1시간 거래량', async () => parseMovnHour(await get(`tokens/${MOVN}/pools?page=1`)), problems, limited);
   if (movnHour) { state.movnHour = movnHour; state.movnHourAt = now; }
 
   state.at = now;
