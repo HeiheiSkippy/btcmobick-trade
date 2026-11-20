@@ -270,7 +270,7 @@ function uniNormalizeList(list) {
     : p);
   raw.forEach((p) => {
     pools[p.id.toLowerCase()] = { proto: p.proto, id: p.id.toLowerCase(), t0: p.t0.toLowerCase(), t1: p.t1.toLowerCase(), fee: p.fee,
-      ts: p.ts, hooks: (p.hooks || "0x0000000000000000000000000000000000000000").toLowerCase(), name: p.name || "" };
+      ts: p.ts, hooks: (p.hooks || "0x0000000000000000000000000000000000000000").toLowerCase(), name: p.name || "", reserveUsd: p.reserveUsd };
   });
   Object.keys(list.routes).forEach((key) => {
     routes[key] = list.routes[key].map((r) => (Array.isArray(r) ? r : r.pools)

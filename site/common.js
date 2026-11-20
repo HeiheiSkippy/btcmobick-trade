@@ -85,33 +85,43 @@ function poolPrice(slot, dec0, dec1) {
   });
 }
 
-// Reference pool for the header MOVN price and the peg view: among the hookless MOVN/USDT v4 pools in the pool list,
-// the one a small MOVN sell is filled in (movnPoolPick), re-picked on every read so a better new pool is followed.
-// Before the list loads, only the 0.05% pool is used. Both tokens have 18 decimals, so raw price equals display price.
-// Resolves to the pool price, which the calculations use; the header shows MOVN_SIDE, the prices after fees.
+// Reference pool for the header MOVN price and the peg view, among the hookless MOVN/USDT v4 pools in the pool list (pegPoolList):
+// the one with the most volume in the last hour (GeckoTerminal, via data/uni-gecko.json), which matched the price the Uniswap app shows.
+// Without fresh volume data, or with no volume in the last hour, it falls back to the pool a small MOVN sell is filled in (movnPoolPick).
+// Re-picked on every read. Before the list loads, only the 0.05% pool is used. Both tokens have 18 decimals, so raw price equals display price.
+// Resolves to the pool price (no fees), which the header shows and the calculations use.
 var MOVN_POOL = { id: "0x5de52159724f0d421445f4a5eeccc047bb6cc7821a008b7a171d896256d3a217", fee: 500 };
-var MOVN_SIDE = { sell: null, buy: null };
+var MOVN_HOUR_MAX_AGE_MS = 30 * 60000;
 function feeLabel(pool) { return pool.fee / 1e4 + "%"; }
 function movnUsdtPrice() {
   var list = pegPoolList();
   if (!list.length) list = [MOVN_POOL];
-  return svBatch(list.reduce(function (a, p) { return a.concat([SV_SLOT0 + p.id.slice(2), SV_LIQ + p.id.slice(2)]); }, []))
-    .then(function (r) {
-      // getSlot0 words: sqrtPriceX96, tick, protocolFee, lpFee.
-      var best = movnPoolPick(list.map(function (p, i) {
-        var s0 = r[2 * i].slice(2), word = function (n) { return Number(BigInt("0x" + s0.slice(64 * n, 64 * n + 64))); };
-        return { pool: p, sqrt: word(0) / Math.pow(2, 96), L: Number(BigInt(r[2 * i + 1])), protoFee: word(2), lpFee: word(3) || p.fee };
-      }));
-      if (!best) throw new Error("빈 풀");
-      MOVN_SIDE = { sell: best.sell, buy: best.buy };
-      // When the reference pool changes, recompute the peg view with the new pool (only if it is on screen).
-      if (best.pool.id !== MOVN_POOL.id && typeof PEG !== "undefined" && PEG.at) {
-        PEG.at = 0;
-        if (onMarketPage()) setTimeout(loadPeg, 0);
-      }
-      MOVN_POOL = best.pool;
-      return best.price;
+  return Promise.all([
+    svBatch(list.reduce(function (a, p) { return a.concat([SV_SLOT0 + p.id.slice(2), SV_LIQ + p.id.slice(2)]); }, [])),
+    loadUniGecko().catch(function () { return null; })
+  ]).then(function (res) {
+    var r = res[0], g = res[1];
+    // getSlot0 words: sqrtPriceX96, tick, protocolFee, lpFee.
+    var cands = list.map(function (p, i) {
+      var s0 = r[2 * i].slice(2), word = function (n) { return Number(BigInt("0x" + s0.slice(64 * n, 64 * n + 64))); };
+      return { pool: p, sqrt: word(0) / Math.pow(2, 96), L: Number(BigInt(r[2 * i + 1])), protoFee: word(2), lpFee: word(3) || p.fee };
     });
+    var best = movnPoolPick(cands);
+    if (!best) throw new Error("빈 풀");
+    var vol = g && g.movnHour && Date.now() - Date.parse(g.movnHourAt) < MOVN_HOUR_MAX_AGE_MS ? g.movnHour : null, top = null;
+    if (vol) cands.forEach(function (c) {
+      var v = vol[c.pool.id.toLowerCase()];
+      if (c.sqrt > 0 && v > 0 && (!top || v > top.v)) top = { pool: c.pool, price: c.sqrt * c.sqrt, v: v };
+    });
+    if (top) best = top;
+    // When the reference pool changes, recompute the peg view with the new pool (only if it is on screen).
+    if (best.pool.id !== MOVN_POOL.id && typeof PEG !== "undefined" && PEG.at) {
+      PEG.at = 0;
+      if (onMarketPage()) setTimeout(loadPeg, 0);
+    }
+    MOVN_POOL = best.pool;
+    return best.price;
+  });
 }
 
 // Rounds to units of 10^4 or 10^8 (Korean man/eok), marking inexact values as approximate.
@@ -158,6 +168,14 @@ function stamp(key, seconds) {
   if (!s.at) return '<span class="fail">받지 못함</span>';
   var t = seconds ? hmss(s.at) : hm(s.at);
   return s.ok ? fresh(t + " 갱신") : '<span class="fail">' + t + " 값 · 갱신 실패</span>";
+}
+// Same states as stamp(), as a time in parentheses after a label: "(05:01:12)".
+function stampParen(key) {
+  var s = SRC[key];
+  if (s.live || (s.at && s.ok)) return fresh("(" + hmss(s.at) + ")");
+  if (!s.tried) return "(불러오는 중)";
+  if (!s.at) return '<span class="fail">(받지 못함)</span>';
+  return '<span class="fail">(' + hmss(s.at) + " 값 · 갱신 실패)</span>";
 }
 function has(v) { return typeof v === "number" && isFinite(v); }
 // Collapsible help (details.help). Sections that are re-rendered often remember their open state by the data-help key.
@@ -682,7 +700,7 @@ window.addEventListener("resize", function () { clearTimeout(renderMarketChart.t
 // Only blockchain.mobick.info allows browser requests, so it is used.
 function renderAll() {
   $("head-usdt").textContent = fmt(D.usdtKrw, 0);
-  $("stamp-bithumb").innerHTML = stamp("bithumb");
+  $("stamp-bithumb").innerHTML = stampParen("bithumb");
   renderMovn();
 
   if (!$("stamp-supply")) return;  // Supply is shown on the market structure page only.
@@ -753,14 +771,12 @@ function pollPools() {
 }
 
 function renderMovn() {
-  var ok = has(D.movnUsdt) && has(MOVN_SIDE.sell);
-  $("head-movn").textContent = ok ? MOVN_SIDE.sell.toFixed(4) : "—";
-  $("head-movn-buy").textContent = ok ? MOVN_SIDE.buy.toFixed(4) : "—";
+  $("head-movn").textContent = has(D.movnUsdt) ? D.movnUsdt.toFixed(4) : "—";
   var link = $("head-movn-pool");
   link.href = "https://app.uniswap.org/explore/pools/bnb/" + MOVN_POOL.id;
   link.title = "유니스왑 MOVN/USDT " + feeLabel(MOVN_POOL) + " 풀";
   link.textContent = "유니스왑 " + feeLabel(MOVN_POOL);
-  $("stamp-pools").innerHTML = stamp("pools", true);
+  $("stamp-pools").innerHTML = stampParen("pools");
   renderMarketNow();
 }
 // Current prices in the legend slot above the chart. Uniswap = pool price (WBMB/MOVN × MOVN/USDT), LBank = last websocket trade.
@@ -918,9 +934,13 @@ function svBatch(datas) {
   }, Promise.resolve([]));
 }
 
+// Pools holding less than PEG_MIN_RESERVE_USD are left out: the Uniswap router skipped such a pool (0.27%, about $471)
+// even though its spot price was higher, so its price could not actually be traded at.
+var PEG_MIN_RESERVE_USD = 500;
 function pegPoolList() {
   return Object.keys(UNI.pools).map(function (id) { return UNI.pools[id]; }).filter(function (p) {
-    return p.proto === "v4" && /^0x0+$/.test(p.hooks) && p.t0 === MOVN.toLowerCase() && p.t1 === USDT.toLowerCase();
+    return p.proto === "v4" && /^0x0+$/.test(p.hooks) && p.t0 === MOVN.toLowerCase() && p.t1 === USDT.toLowerCase() &&
+      !(p.reserveUsd < PEG_MIN_RESERVE_USD);
   });
 }
 

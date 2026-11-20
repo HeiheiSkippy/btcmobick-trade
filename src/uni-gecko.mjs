@@ -3,7 +3,8 @@
 //
 //   node src/uni-gecko.mjs site/data/uni-gecko.json [previous file URL]
 //
-// 6 requests: 2 hourly candle series (WBMB/MOVN 0.1%, MOVN/USDT 0.05%), 3 large-trade lists ($500+ per pool), 1 pool info (24h volume).
+// 7 requests: 2 hourly candle series (WBMB/MOVN 0.1%, MOVN/USDT 0.05%), 3 large-trade lists ($500+ per pool), 1 pool info (24h volume),
+// 1 MOVN token pool list (1h volume of every MOVN/USDT pool).
 // Each part keeps its own fetch time, and a failed part keeps the previous file's value. The Action starts from an empty folder,
 // so without a local file it fetches the previous file (the published copy).
 // Failures other than rate limiting (429), such as a changed response format, exit with code 1 so this doubles as a check.
@@ -13,7 +14,8 @@
 //   { at,
 //     hoursAt, hours: { wm10: [[hour start unix seconds, close, volume (quote asset)], ...], mu05: [...] },
 //     tradesAt, trades: [{ t, pool, buy, qty (base asset), usd, wallet, tx }, …],
-//     volumeAt, volume: { mu05, mu29, wm10 (24h volume, USD) } }
+//     volumeAt, volume: { mu05, mu29, wm10 (24h volume, USD) },
+//     movnHourAt, movnHour: { pool id: 1h volume (USD) } for MOVN/USDT pools }
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -24,6 +26,7 @@ const HOURS = 7 * 24 + 2;
 export const TRADE_MIN_USD = 500;
 
 const GECKO = 'https://api.geckoterminal.com/api/v2/networks/bsc/';
+const MOVN = '0x200b63aa750c901892d4dcf82439860f9c270274', USDT = '0x55d398326f99059ff775485246999027b3197955';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // 1 second between requests (6 requests leave plenty of room under the per-minute limit). On 429, retry once after 20 seconds.
@@ -75,6 +78,21 @@ export function parseVolumes(j) {
   return out;
 }
 
+// MOVN token pool list response -> { pool id: 1h volume (USD) } for pools between MOVN and USDT.
+// The page shows the price of the pool with the most volume in the last hour, which is what the Uniswap app was seen to show.
+export function parseMovnHour(j) {
+  if (!j || !Array.isArray(j.data)) throw new Error('MOVN 풀 목록 형식이 다릅니다');
+  const tok = (p, side) => String((((p.relationships || {})[side] || {}).data || {}).id || '').replace(/^bsc_/, '').toLowerCase();
+  const out = {};
+  for (const p of j.data) {
+    const a = p.attributes || {}, pair = [tok(p, 'base_token'), tok(p, 'quote_token')].sort().join();
+    const v = Number(a.volume_usd && a.volume_usd.h1), id = String(a.address || '').toLowerCase();
+    if (pair === [MOVN, USDT].sort().join() && /^0x[0-9a-f]+$/.test(id) && Number.isFinite(v)) out[id] = v;
+  }
+  if (!Object.keys(out).length) throw new Error('MOVN/USDT 풀의 volume_usd.h1이 없습니다');
+  return out;
+}
+
 async function readPrevious(out, previousUrl) {
   try { return JSON.parse(await readFile(out, 'utf8')); } catch {}
   if (!previousUrl) return null;
@@ -119,6 +137,9 @@ export async function collect(prev, get = gecko, { trades: withTrades = true } =
     parseVolumes(await get('pools/multi/' + Object.values(POOLS).map((p) => p.id).join(','))), problems, limited);
   if (volume) { state.volume = volume; state.volumeAt = now; }
 
+  const movnHour = await part('MOVN/USDT 1시간 거래량', async () => parseMovnHour(await get(`tokens/${MOVN}/pools?page=1`)), problems, limited);
+  if (movnHour) { state.movnHour = movnHour; state.movnHourAt = now; }
+
   state.at = now;
   return { state, problems, limited };
 }
@@ -133,7 +154,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const { state, problems, limited } = await collect(await readPrevious(out, previousUrl), gecko, { trades: !noTrades });
   await mkdir(dirname(out), { recursive: true });
   await writeFile(out, JSON.stringify(state) + '\n');
-  console.log(`GeckoTerminal 값 · 봉 ${state.hoursAt || '없음'} · 큰 거래 ${state.trades ? state.trades.length : 0}건 ${state.tradesAt || '없음'} · 거래량 ${state.volumeAt || '없음'}`);
+  console.log(`GeckoTerminal 값 · 봉 ${state.hoursAt || '없음'} · 큰 거래 ${state.trades ? state.trades.length : 0}건 ${state.tradesAt || '없음'} · 거래량 ${state.volumeAt || '없음'} · MOVN 1시간 거래량 ${state.movnHourAt || '없음'}`);
   if (limited.length) console.log('요청 제한(429)으로 받지 못해 이전 값을 둠(고장 아님): ' + limited.join(', '));
   if (problems.length) {
     console.error('GeckoTerminal 값을 받지 못함:\n- ' + problems.join('\n- ') + '\n고치는 절차는 Docs/GECKO_CHECK.md');
