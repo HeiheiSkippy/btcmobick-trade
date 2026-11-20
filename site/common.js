@@ -596,11 +596,10 @@ function renderMarketChart() {
   }
   addVol(uni, "u"); addVol(lb, "l");
   var volMax = Math.max.apply(null, Object.keys(vol).map(function (h) { return vol[h].u + vol[h].l; }).concat([0]));
-  // 7-day totals: how much larger the bigger venue is (%), plus both amounts, bigger venue first.
-  // Returned as two lines to fit phone width: [comparison, (amounts)].
+  // 7-day totals per venue, bigger venue first. Returned as two lines to fit phone width: [label, (amounts)].
   function volCompare() {
-    var bigLb = volLb >= volUni, big = bigLb ? volLb : volUni, small = bigLb ? volUni : volLb;
-    return [small > 0 ? "7일 합계 " + (bigLb ? "LBank" : "유니스왑") + "가 " + Math.round((big / small - 1) * 100) + "% 많음" : "7일 합계",
+    var bigLb = volLb >= volUni;
+    return ["7일 합계",
       "(" + (bigLb ? "LBank " + fmt(volLb, 0) + " · 유니스왑 " + fmt(volUni, 0) : "유니스왑 " + fmt(volUni, 0) + " · LBank " + fmt(volLb, 0)) + " USDT)"];
   }
   var svg = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="유니스왑과 LBank의 BMB 시장가, BTC 가격, 시간별 거래대금, USDT, 최근 7일">';
@@ -626,8 +625,8 @@ function renderMarketChart() {
     if (hasBtc) svg += '<text class="btc" x="' + (L - 4) + '" y="' + (y + 3.5).toFixed(1) + '" text-anchor="end">' + fmt(v * Math.exp(-off), 0) + "</text>";
   }
   if (hasBtc) svg += '<text class="ax-title btc" x="4" y="' + (T - 12) + '">↑ BTC</text>';
-  svg += '<text class="ax-title" x="' + (W - 4) + '" y="' + (T - 12) + '" text-anchor="end">BMB 가격 (USDT' + (narrow ? "" : " · 눈금 간격 " + stepPct + "%") + ") ↑</text>" +
-    '<text class="ax-title" x="' + (W - R) + '" y="' + (PB + 16) + '" text-anchor="end">1시간 종가 · 맨 오른쪽은 현재가</text>';
+  svg += '<text class="ax-title" x="' + (W - 4) + '" y="' + (T - 12) + '" text-anchor="end">BMB ↑</text>' +
+    '<text class="ax-title" x="' + (W - R) + '" y="' + (PB + 16) + '" text-anchor="end">USDT' + (narrow ? "" : " · 눈금 간격 " + stepPct + "%") + " · 1시간 종가 · 맨 오른쪽은 현재가</text>";
   if (volMax > 0) svg += '<text class="ax-title" x="' + (W - R) + '" y="' + (H - 18) + '" text-anchor="end">1시간 거래대금 · ' + volCompare()[0] + '</text>' +
     '<text class="ax-title" x="' + (W - R) + '" y="' + (H - 4) + '" text-anchor="end">' + volCompare()[1] + "</text>";
   // Date ticks at KST midnight, counted back from the latest one. A label like "10/10" is about 32px wide,
@@ -837,7 +836,7 @@ function renderMarketNow() {
   }
   $("market-now").innerHTML = item("uni", "유니스왑", uni, "받는 중") +
     item("lbank", "LBank", lb, LBK.state === "live" ? "체결 기다리는 중" : LBK.state === "failed" ? "연결 안 됨" : "연결 중") +
-    (has(BTC_NOW) ? '<span class="now-item"><i class="btc"></i>BTC <b>' + fmt(BTC_NOW, 0) + "</b> USDT" + won(BTC_NOW) + "</span>" : "");
+    (has(BTC_NOW) ? '<span class="now-item"><i class="btc"></i>BTC(바이낸스) <b>' + fmt(BTC_NOW, 0) + "</b> USDT" + won(BTC_NOW) + "</span>" : "");
   var at = new Date(Date.now() + 9 * 3600000);
   $("market-at").textContent = [at.getUTCHours(), at.getUTCMinutes(), at.getUTCSeconds()].map(function (n) { return String(n).padStart(2, "0"); }).join(":");
   // Redraw the chart so its rightmost point matches this line; updates arriving together are merged into one redraw.
