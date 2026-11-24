@@ -69,7 +69,17 @@
     border-left: 3px solid var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent);
   }
   .unofficial b { color: var(--warn); }
-  .unofficial .unofficial-more { display: block; margin-top: 8px; }
+  /* PaperWallet Helper pointer: accent stripe so it reads apart from the orange reference note */
+  .pwh-callout {
+    display: flex; align-items: center; gap: 10px; margin: 2px 0 0; padding: 10px 12px;
+    font-size: 14px; font-weight: 600; line-height: 1.5; color: var(--ink);
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+  }
+  .pwh-callout a { color: var(--accent); }
+  .pwh-callout .pwh-tag {
+    flex: none; font-size: 11.5px; font-weight: 700; color: var(--surface); background: var(--accent);
+    padding: 1px 8px; border-radius: 999px;
+  }
   section { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; }
   .pad { padding: 18px 18px; }
   h2 {
@@ -485,6 +495,13 @@
   .app-promo .app-promo-note { margin-top: 4px; font-size: 12.5px; color: var(--muted); }
   .app-promo .tag { font-size: 11px; font-weight: 600; color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); padding: 0 6px; border-radius: 4px; }
   .app-promo .app-promo-warn { color: var(--bad); font-weight: 700; }
+  .app-promo .app-promo-new {
+    margin: 10px 0 0; padding: 8px 12px; font-size: 13.5px;
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+  }
+  .app-promo .app-promo-new strong { color: var(--accent); }
+  .app-promo .app-promo-new ul { margin: 4px 0 0; padding-left: 18px; color: var(--ink); }
+  .app-promo .app-promo-new li + li { margin-top: 2px; }
   footer .app-promo { margin: 14px 0 6px; line-height: 1.55; }
   .app-promo a { color: var(--accent); }
   .app-promo .app-promo-title { color: var(--ink); }
